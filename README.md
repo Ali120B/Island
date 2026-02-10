@@ -38,4 +38,5 @@ Artifacts will be found in the `out/make` directory.
 
 Check the `packaging/` directory for integration details.
 
-#Forked from Original Author: https://github.com/TopMyster/Ripple
+## Forked from Original Author: 
+https://github.com/TopMyster/Ripple
