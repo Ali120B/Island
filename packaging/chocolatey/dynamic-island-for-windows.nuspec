@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>dynamic-island-for-windows</id>
+    <version>2.3.3</version>
+    <title>Dynamic Island for windows</title>
+    <authors>Ali Bashmail</authors>
+    <description>Dynamic Island for All</description>
+    <projectUrl>https://github.com/AliBashmail/Dynamic-Island-for-windows</projectUrl>
+    <licenseUrl>https://github.com/AliBashmail/Dynamic-Island-for-windows/blob/main/LICENSE</licenseUrl>
+    <tags>dynamic-island desktop utility windows</tags>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

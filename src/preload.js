@@ -1,0 +1,33 @@
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  getPathForFile: (file) => webUtils.getPathForFile(file),
+  setIgnoreMouseEvents: (ignore, forward) => ipcRenderer.invoke('set-ignore-mouse-events', ignore, forward),
+  controlSystemMedia: (action) => ipcRenderer.invoke('control-system-media', action),
+  getSystemMedia: () => ipcRenderer.invoke('get-system-media'),
+  getBluetoothStatus: () => ipcRenderer.invoke('get-bluetooth-status'),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  log: (msg) => ipcRenderer.invoke('log', msg),
+  writeFilesToClipboard: (filePaths) => ipcRenderer.invoke('write-files-to-clipboard', filePaths),
+  getTempFiles: () => ipcRenderer.invoke('get-temp-files'),
+  copyToTemp: (filePaths) => ipcRenderer.invoke('copy-to-temp', filePaths),
+  moveToTemp: (filePaths) => ipcRenderer.invoke('move-to-temp', filePaths),
+  clearTempFiles: (filePaths) => ipcRenderer.invoke('clear-temp-files', filePaths),
+  moveFromTemp: (data) => ipcRenderer.invoke('move-from-temp', data),
+  startDrag: (filePath) => ipcRenderer.send('ondragstart', filePath),
+  saveChatHistory: (chat) => ipcRenderer.invoke('save-chat-history', chat),
+  getChatHistory: () => ipcRenderer.invoke('get-chat-history'),
+  clearChatHistory: () => ipcRenderer.invoke('clear-chat-history'),
+  onDragFinished: (callback) => ipcRenderer.on('drag-finished', (event, path) => callback(path)),
+  getClipboardHistory: () => ipcRenderer.invoke('get-clipboard-history'),
+  copyToClipboard: (item) => ipcRenderer.invoke('copy-to-clipboard', item),
+  clearClipboardHistory: () => ipcRenderer.invoke('clear-clipboard-history'),
+  deleteClipboardItem: (timestamp) => ipcRenderer.invoke('delete-clipboard-item', timestamp),
+  onClipboardUpdate: (callback) => ipcRenderer.on('clipboard-update', (event, history) => callback(history)),
+  saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  changeVolume: (direction) => ipcRenderer.invoke('change-volume', direction),
+  changeBrightness: (direction) => ipcRenderer.invoke('change-brightness', direction),
+  saveTodo: (todos) => ipcRenderer.invoke('save-todo', todos),
+  getTodo: () => ipcRenderer.invoke('get-todo')
+});
