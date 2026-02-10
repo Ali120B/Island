@@ -1,8 +1,5 @@
 # Island
 ##### Apple's Dynamic Island on your Windows computer
-https://github.com/user-attachments/assets/2a142434-0812-4e2f-adfd-3fed0500153a
-
-### <a href="https://discord.gg/a2xzVkxFVg">Join the Discord</a>
 
 The Dynamic Island for Windows.
 
@@ -35,8 +32,10 @@ Artifacts will be found in the `out/make` directory.
 
 ## Distribution
 
+
 ### Official Package Managers
 - **Chocolatey (Windows)**: Nuspec available at `packaging/chocolatey/ripple.nuspec`
 
 Check the `packaging/` directory for integration details.
 
+#Forked from Original Author: https://github.com/TopMyster/Ripple
