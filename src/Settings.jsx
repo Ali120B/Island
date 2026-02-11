@@ -165,7 +165,8 @@ export default function Settings() {
             fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif',
             color: '#eee',
             backgroundColor: '#0a0a0a',
-            height: '100vh',
+            minHeight: '100vh',
+            width: '100%',
             overflowY: 'auto',
             boxSizing: 'border-box',
             scrollbarWidth: 'none'

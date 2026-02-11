@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Component } from 'react';
-import { Home, Music, MessageSquare, Cloud, Battery, BatteryLow, BatteryMedium, BatteryFull, Zap, ChevronLeft, ChevronRight, Sun, Moon, Box, Search, History, Trash2, X, Clipboard as ClipboardIcon, Volume2, VolumeX, Wind, Droplets, Thermometer, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Timer as TimerIcon, Pin, CloudRain, Plus, List } from 'lucide-react';
+import { Home, Music, MessageSquare, Cloud, Battery, BatteryLow, BatteryMedium, BatteryFull, Zap, ChevronLeft, ChevronRight, Sun, Moon, Box, Search, History, Trash2, X, Clipboard as ClipboardIcon, Volume2, VolumeX, Wind, Droplets, Thermometer, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Timer as TimerIcon, Pin, CloudRain, Plus, List, Edit2, Settings } from 'lucide-react';
 import { OpenAI } from "openai";
 import "./App.css";
 import lowBatteryIcon from "./assets/images/lowbattery.png";
@@ -103,6 +103,14 @@ export default function Island() {
   const [todoInput, setTodoInput] = useState("");
   const [weatherDetails, setWeatherDetails] = useState(null);
   const [pinnedUrls, setPinnedUrls] = useState(JSON.parse(localStorage.getItem("pinned-urls") || '["https://youtube.com", "https://whatsapp.com", "https://notion.so", "https://drive.google.com"]'));
+  const [isEditingUrls, setIsEditingUrls] = useState(false);
+  const [editingUrlIndex, setEditingUrlIndex] = useState(null);
+
+  useEffect(() => {
+    if (mode !== 'large' || view !== 'search_urls') {
+      setIsEditingUrls(false);
+    }
+  }, [mode, view]);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerIntervalRef] = useState(useRef(null));
@@ -1713,19 +1721,50 @@ const handleDropToMove = async (e) => {
                 <div key={idx} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
                   <div 
                     onClick={() => {
-                      window.electronAPI?.openExternal ? window.electronAPI.openExternal(url) : window.open(url, "_blank");
-                      setView('home');
+                      if (isEditingUrls) {
+                        setEditingUrlIndex(idx);
+                        setNewUrlData({ name: '', url: url });
+                        setShowAddUrlModal(true);
+                      } else {
+                        window.electronAPI?.openExternal ? window.electronAPI.openExternal(url) : window.open(url, "_blank");
+                        setView('home');
+                      }
                     }}
                     style={{ 
                       width: 45, height: 45, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
                       background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'transform 0.2s ease'
+                      transition: 'all 0.2s ease',
+                      border: isEditingUrls ? '1px solid rgba(255,255,255,0.3)' : 'none'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                   >
-                    <img src={iconUrl} alt={domain} style={{ width: '60%', height: '60%', objectFit: 'contain' }} />
+                    <img src={iconUrl} alt={domain} style={{ width: '60%', height: '60%', objectFit: 'contain', opacity: isEditingUrls ? 0.5 : 1 }} />
+                    
+                    {isEditingUrls && (
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+                        <Edit2 size={14} color="white" />
+                      </div>
+                    )}
                   </div>
+
+                  {isEditingUrls && (
+                    <div 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const newUrls = pinnedUrls.filter((_, i) => i !== idx);
+                        setPinnedUrls(newUrls);
+                        localStorage.setItem("pinned-urls", JSON.stringify(newUrls));
+                      }}
+                      style={{ 
+                        position: 'absolute', top: -5, right: -5, width: 18, height: 18, borderRadius: '50%',
+                        background: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', zIndex: 10, border: '2px solid rgba(0,0,0,0.5)'
+                      }}
+                    >
+                      <X size={10} color="white" strokeWidth={3} />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1751,6 +1790,27 @@ const handleDropToMove = async (e) => {
             )}
           </div>
 
+          {/* Edit Toggle Button */}
+          <div 
+            onClick={() => setIsEditingUrls(!isEditingUrls)}
+            style={{ 
+              position: 'absolute', bottom: 15, right: 15, width: 24, height: 24, borderRadius: 6,
+              background: isEditingUrls ? 'rgba(79, 172, 254, 0.2)' : 'rgba(255,255,255,0.05)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              transition: 'all 0.2s ease', border: isEditingUrls ? '1px solid rgba(79, 172, 254, 0.4)' : '1px solid rgba(255,255,255,0.1)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = isEditingUrls ? 'rgba(79, 172, 254, 0.3)' : 'rgba(255,255,255,0.1)';
+              e.currentTarget.style.transform = 'scale(1.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = isEditingUrls ? 'rgba(79, 172, 254, 0.2)' : 'rgba(255,255,255,0.05)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+          >
+            <Settings size={12} color={isEditingUrls ? '#4facfe' : textColor} opacity={isEditingUrls ? 1 : 0.5} />
+          </div>
+
           {/* Custom Add URL Modal */}
           {showAddUrlModal && (
             <div style={{
@@ -1759,7 +1819,9 @@ const handleDropToMove = async (e) => {
               border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
               justifyContent: 'center', gap: 15
             }}>
-              <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5, textAlign: 'center' }}>ADD QUICK APP</div>
+              <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5, textAlign: 'center' }}>
+                {editingUrlIndex !== null ? 'EDIT QUICK APP' : 'ADD QUICK APP'}
+              </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <input
@@ -1785,12 +1847,21 @@ const handleDropToMove = async (e) => {
                     let finalUrl = newUrlData.url.trim();
                     if (finalUrl) {
                       if (!/^https?:\/\//i.test(finalUrl)) finalUrl = 'https://' + finalUrl;
-                      const newUrls = [...pinnedUrls, finalUrl];
+                      
+                      let newUrls;
+                      if (editingUrlIndex !== null) {
+                        newUrls = [...pinnedUrls];
+                        newUrls[editingUrlIndex] = finalUrl;
+                      } else {
+                        newUrls = [...pinnedUrls, finalUrl];
+                      }
+                      
                       setPinnedUrls(newUrls);
                       localStorage.setItem("pinned-urls", JSON.stringify(newUrls));
                     }
                     setShowAddUrlModal(false);
                     setNewUrlData({ name: '', url: '' });
+                    setEditingUrlIndex(null);
                   }}
                   style={{ flex: 1, padding: '10px', borderRadius: 12, background: 'rgba(74, 222, 128, 0.2)', color: '#4ade80', fontSize: 12, fontWeight: 700, textAlign: 'center', cursor: 'pointer' }}
                 >
@@ -1800,6 +1871,7 @@ const handleDropToMove = async (e) => {
                   onClick={() => {
                     setShowAddUrlModal(false);
                     setNewUrlData({ name: '', url: '' });
+                    setEditingUrlIndex(null);
                   }}
                   style={{ flex: 1, padding: '10px', borderRadius: 12, background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: 12, fontWeight: 700, textAlign: 'center', cursor: 'pointer' }}
                 >
