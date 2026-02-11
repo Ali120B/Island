@@ -14,11 +14,21 @@ module.exports = {
   rebuildConfig: {},
   makers: [
     {
+      name: '@electron-forge/maker-squirrel',
+      config: {
+        name: 'Island',
+        setupIcon: 'src/assets/icons/icon.ico',
+        setupExe: 'IslandSetup.exe',
+        noMsi: true,
+      }
+    },
+    {
       name: '@electron-forge/maker-wix',
       config: {
         language: 1033,
         manufacturer: 'Ali Bashmail',
         description: 'Ripple - Dynamic Island for Windows',
+        installScope: 'perUser',
         ui: {
           chooseDirectory: true,
         },

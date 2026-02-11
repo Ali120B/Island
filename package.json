@@ -1,13 +1,13 @@
 {
   "name": "island-app",
   "productName": "Island",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "description": "Dynamic Island for windows",
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make",
+    "make": "electron-forge make --arch x64,ia32",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\""
   },
@@ -19,6 +19,7 @@
   "license": "MIT",
   "devDependencies": {
     "@electron-forge/cli": "^7.8.1",
+    "@electron-forge/maker-appx": "^7.11.1",
     "@electron-forge/maker-squirrel": "^7.8.1",
     "@electron-forge/maker-wix": "^7.8.1",
     "@electron-forge/maker-zip": "^7.8.1",
