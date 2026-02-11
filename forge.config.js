@@ -8,20 +8,11 @@ module.exports = {
     executableName: 'Island',
     icon: 'src/assets/icons/icon',
     extraResource: [
-      path.join(__dirname, 'src/assets/icons/icon.png'),
+      path.join(__dirname, 'src/assets'),
     ],
   },
   rebuildConfig: {},
   makers: [
-    {
-      name: '@electron-forge/maker-squirrel',
-      config: {
-        name: 'Island',
-        setupIcon: 'src/assets/icons/icon.ico',
-        setupExe: 'IslandSetup.exe',
-        noMsi: true,
-      }
-    },
     {
       name: '@electron-forge/maker-wix',
       config: {

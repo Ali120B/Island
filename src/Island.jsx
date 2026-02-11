@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, Component } from 'react';
-import { Home, Music, MessageSquare, Cloud, Battery, BatteryLow, BatteryMedium, BatteryFull, Zap, ChevronLeft, ChevronRight, Sun, Moon, Box, Search, History, Trash2, X, Clipboard as ClipboardIcon, Volume2, VolumeX, Wind, Droplets, Thermometer, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Timer as TimerIcon, Pin, CloudRain, Plus, List, Edit2, Settings } from 'lucide-react';
+import { Home, Music, MessageSquare, Cloud, Battery, BatteryLow, BatteryMedium, BatteryFull, Zap, ChevronLeft, ChevronRight, Sun, Moon, Box, Search, History, Trash2, X, Clipboard as ClipboardIcon, Volume2, VolumeX, Wind, Droplets, Thermometer, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Timer as TimerIcon, Pin, CloudRain, Plus, List, Edit2, Settings, Check } from 'lucide-react';
 import { OpenAI } from "openai";
 import "./App.css";
 import lowBatteryIcon from "./assets/images/lowbattery.png";
 import chargingIcon from "./assets/images/charging.png";
+import remainderSoundLocal from "./assets/audio/remainder.mp3";
 
 //Get Date
 function formatDateShort(input) {
@@ -40,6 +41,9 @@ export default function Island() {
   const [browserSearch, setBrowserSearch] = useState("");
   const [batteryAlertsEnabled, setBatteryAlertsEnabled] = useState(localStorage.getItem("battery-alerts") !== "false");
   const [islandBorderEnabled, setIslandBorderEnabled] = useState(localStorage.getItem("island-border") === "true");
+  const [islandBorderColor, setIslandBorderColor] = useState(localStorage.getItem("island-border-color") || "#FAFAFA");
+  const [islandBorderThickness, setIslandBorderThickness] = useState(Number(localStorage.getItem("island-border-thickness") || 1));
+  const [islandBorderStyle, setIslandBorderStyle] = useState(localStorage.getItem("island-border-style") || "solid");
   const [standbyBorderEnabled, setStandbyEnabled] = useState(localStorage.getItem("standby-mode") === "true");
   const [largeStandbyEnabled, setLargeStandbyEnabled] = useState(localStorage.getItem("large-standby-mode") === "true");
   const [hideNotActiveIslandEnabled, sethideNotActiveIslandEnabled] = useState(localStorage.getItem("hide-island-notactive") === "true");
@@ -111,11 +115,94 @@ export default function Island() {
       setIsEditingUrls(false);
     }
   }, [mode, view]);
+
+  const formatMonthTitle = (d) => d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const daysInMonth = (d) => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  const startWeekday = (d) => new Date(d.getFullYear(), d.getMonth(), 1).getDay();
+  const toIsoDate = (y, mIndex, day) => {
+    const mm = String(mIndex + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    return `${y}-${mm}-${dd}`;
+  };
+
+  useEffect(() => {
+    return () => {
+      try {
+        if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+        if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
+      } catch {
+      }
+    };
+  }, []);
+
+  const stopRingingNow = async ({ isoDate, eventId, navigate } = {}) => {
+    try {
+      if (ringTimeoutRef.current) {
+        clearTimeout(ringTimeoutRef.current);
+        ringTimeoutRef.current = null;
+      }
+      if (ringIntervalRef.current) {
+        clearInterval(ringIntervalRef.current);
+        ringIntervalRef.current = null;
+      }
+      if (typeof stopBeepRef.current === 'function') {
+        try { stopBeepRef.current(); } catch { }
+        stopBeepRef.current = null;
+      }
+      setRingingEvent(null);
+
+      if (isoDate && eventId) {
+        await deleteCalendarEventByDate(isoDate, eventId);
+      }
+
+      if (navigate && isoDate) {
+        setSelectedCalendarDate(isoDate);
+        setMode('large');
+        setView('todo_calendar_events');
+        setLastInteraction(Date.now());
+        await loadCalendarEvents();
+      }
+    } catch (err) {
+      console.error('Failed to stop ringing:', err);
+    }
+  };
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerIntervalRef] = useState(useRef(null));
+  const [watchMode, setWatchMode] = useState('timer'); // timer | stopwatch
+  const [stopwatchSeconds, setStopwatchSeconds] = useState(0);
+  const [isStopwatchRunning, setIsStopwatchRunning] = useState(false);
   const [showAddUrlModal, setShowAddUrlModal] = useState(false);
   const [newUrlData, setNewUrlData] = useState({ name: '', url: '' });
+
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  });
+  const [calendarEvents, setCalendarEvents] = useState({});
+  const [calendarEventInput, setCalendarEventInput] = useState("");
+  const [calendarEventTimeInput, setCalendarEventTimeInput] = useState("");
+  const [calendarEventAmPm, setCalendarEventAmPm] = useState("AM");
+  const [editingCalendarEventAmPm, setEditingCalendarEventAmPm] = useState("AM");
+  const [editingCalendarEventId, setEditingCalendarEventId] = useState(null);
+  const [editingCalendarEventText, setEditingCalendarEventText] = useState("");
+  const [editingCalendarEventTime, setEditingCalendarEventTime] = useState("");
+  const [ringingEvent, setRingingEvent] = useState(null);
+  const ringingPrevModeRef = useRef(null);
+  const rungEventIdsRef = useRef(new Set());
+  const ringTimeoutRef = useRef(null);
+  const ringIntervalRef = useRef(null);
+  // audioCtxRef removed per user request to remove audio for events
+  const stopBeepRef = useRef(null);
+
+  const [showControls, setShowControls] = useState(false);
 
   const getWeatherStyles = () => {
     const hour = new Date().getHours();
@@ -132,12 +219,12 @@ export default function Island() {
       bgColor = "#4facfe"; // Sky blue
     }
     // Evening/Sunset: 5pm - 8pm
-    else if (hour >= 17 && hour < 20) {
+    else if (hour >= 15 && hour < 20) {
       bgColor = "linear-gradient(180deg, #4facfe 0%, #8b5cf6 100%)";
     }
-    // Night: 8pm - 5am
+    // Night: 8pm - 
     else {
-      bgColor = "#2e1065"; // Dark purplish
+      bgColor = "#1e1b4b"; // Dark purple
     }
 
     let icon = (hour >= 6 && hour < 18) ? <Sun size={48} color={iconColor} /> : <Moon size={48} color={iconColor} />;
@@ -152,7 +239,7 @@ export default function Island() {
           </div>
         );
       } else {
-        bgColor = "#111827";
+        bgColor = "#1e1b4b"; // Dark purple for cloudy night
         icon = (
           <div style={{ position: 'relative' }}>
             <Moon size={32} color={iconColor} style={{ position: 'absolute', top: -10, left: -10 }} />
@@ -161,7 +248,7 @@ export default function Island() {
         );
       }
     } else if (condition.includes("rain")) {
-      bgColor = (hour >= 6 && hour < 18) ? "#475569" : "#0f172a";
+      bgColor = (hour >= 6 && hour < 18) ? "#475569" : "#1e1b4b"; // Dark purple for rainy night
       icon = <CloudRain size={48} color={iconColor} />;
     }
 
@@ -176,6 +263,167 @@ export default function Island() {
     if (window.electronAPI?.saveTodo) {
       await window.electronAPI.saveTodo(newTodos);
     }
+  };
+
+  const loadCalendarEvents = async () => {
+    try {
+      if (window.electronAPI?.getCalendarEvents) {
+        const data = await window.electronAPI.getCalendarEvents();
+        if (data && typeof data === 'object') setCalendarEvents(data);
+      }
+    } catch (err) {
+      console.error('Failed to load calendar events:', err);
+    }
+  };
+
+  const saveCalendarEvents = async (next) => {
+    setCalendarEvents(next);
+    try {
+      if (window.electronAPI?.saveCalendarEvents) {
+        await window.electronAPI.saveCalendarEvents(next);
+      }
+    } catch (err) {
+      console.error('Failed to save calendar events:', err);
+    }
+  };
+
+  const convertTo24Hour = (timeStr, amPm) => {
+    if (!timeStr) return "";
+    const parts = timeStr.split(':');
+    let h = parseInt(parts[0]);
+    let m = parts[1] || '00';
+    let s = parts[2] || '00';
+    
+    if (amPm === 'PM' && h < 12) h += 12;
+    if (amPm === 'AM' && h === 12) h = 0;
+    
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const parse24to12 = (time24) => {
+    if (!time24) return { time: "", amPm: "AM" };
+    const parts = time24.split(':');
+    let h = parseInt(parts[0]);
+    let m = parts[1] || '00';
+    let s = parts[2] || '00';
+    let amPm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    if (h === 0) h = 12;
+    return {
+      time: `${String(h).padStart(2, '0')}:${m}${s !== '00' ? ':' + s : ''}`,
+      amPm
+    };
+  };
+
+  const addCalendarEvent = async () => {
+    const text = calendarEventInput.trim();
+    if (!text) return;
+
+    let t = (calendarEventTimeInput || '').trim();
+    if (t) {
+      t = convertTo24Hour(t, calendarEventAmPm);
+    }
+    const time = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(t) ? t : '';
+
+    const newEvent = { id: Date.now(), text, time };
+    const next = { ...(calendarEvents || {}) };
+    const existing = Array.isArray(next[selectedCalendarDate]) ? next[selectedCalendarDate] : [];
+    next[selectedCalendarDate] = [...existing, newEvent];
+    setCalendarEventInput("");
+    setCalendarEventTimeInput("");
+    await saveCalendarEvents(next);
+  };
+
+  const updateCalendarEvent = async (eventId, patch) => {
+    const next = { ...(calendarEvents || {}) };
+    const existing = Array.isArray(next[selectedCalendarDate]) ? next[selectedCalendarDate] : [];
+    next[selectedCalendarDate] = existing.map(e => e.id === eventId ? { ...e, ...patch } : e);
+    await saveCalendarEvents(next);
+  };
+
+  const deleteCalendarEventByDate = async (isoDate, eventId) => {
+    const next = { ...(calendarEvents || {}) };
+    const existing = Array.isArray(next[isoDate]) ? next[isoDate] : [];
+    next[isoDate] = existing.filter(e => e.id !== eventId);
+    if (next[isoDate].length === 0) delete next[isoDate];
+    await saveCalendarEvents(next);
+  };
+
+  const formatTimeInput = (value) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0,2)}:${digits.slice(2)}`;
+    return `${digits.slice(0,2)}:${digits.slice(2,4)}:${digits.slice(4,6)}`;
+  };
+
+  const getTodayIso = () => {
+    const d = new Date();
+    return toIsoDate(d.getFullYear(), d.getMonth(), d.getDate());
+  };
+
+  const playTimerBeepFor10s = () => {
+    console.log('Playing reminder audio from local file:', remainderSoundLocal);
+    const audio = new Audio(remainderSoundLocal);
+    audio.loop = true;
+    audio.volume = 1.0;
+    audio.muted = false;
+    
+    // Explicitly load and play
+    audio.load();
+    const playPromise = audio.play();
+
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => console.log('Playing local reminder audio SUCCESS'))
+        .catch(err => {
+          console.error('Local audio playback failed:', err);
+        });
+    }
+
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  };
+
+  const startRinging = async ({ isoDate, ev }) => {
+    if (!ev?.id) return;
+    if (rungEventIdsRef.current.has(ev.id)) return;
+
+    rungEventIdsRef.current.add(ev.id);
+    ringingPrevModeRef.current = mode;
+    setRingingEvent({ id: ev.id, text: ev.text, time: ev.time || '', remainingMs: 10000, isoDate });
+    setLastInteraction(Date.now());
+
+    if (mode === 'still') {
+      setMode('quick');
+      if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false, false);
+    }
+
+    // Audio for events removed per user request
+    // const stopBeep = playTimerBeepFor10s();
+    // stopBeepRef.current = stopBeep;
+
+    if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
+    ringIntervalRef.current = setInterval(() => {
+      setRingingEvent(prev => {
+        if (!prev) return prev;
+        const nextMs = Math.max(0, prev.remainingMs - 250);
+        return { ...prev, remainingMs: nextMs };
+      });
+    }, 250);
+
+    if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+    ringTimeoutRef.current = setTimeout(async () => {
+      await stopRingingNow({ isoDate, eventId: ev.id });
+
+      if (!isMouseOver.current && ringingPrevModeRef.current === 'still') {
+        setMode('still');
+        if (window.electronAPI && !isMouseDown.current) {
+          window.electronAPI.setIgnoreMouseEvents(true, true);
+        }
+      }
+    }, 10000);
   };
 
   const toggleTodo = async (id) => {
@@ -233,20 +481,30 @@ export default function Island() {
           const direction = e.deltaY < 0 ? 'up' : 'down';
           if (scrollAction === 'volume') {
             if (window.electronAPI && typeof window.electronAPI.changeVolume === 'function') {
-              window.electronAPI.changeVolume(direction).catch(err => {
+              window.electronAPI.changeVolume(direction).then((percent) => {
+                if (typeof percent === 'number' && Number.isFinite(percent)) {
+                  setScrollValue(Math.min(Math.max(percent, 0), 100));
+                } else {
+                  // Fallback when the main process can't return the real volume percent.
+                  // Keep the overlay roughly aligned by stepping a small amount.
+                  setScrollValue(prev => (direction === 'up' ? Math.min(prev + 2, 100) : Math.max(prev - 2, 0)));
+                }
+              }).catch(err => {
                 console.error("Volume IPC failed:", err);
               });
-              setScrollValue(prev => (direction === 'up' ? Math.min(prev + 5, 100) : Math.max(prev - 5, 0)));
               setShowScrollOverlay(true);
               if (overlayTimeout.current) clearTimeout(overlayTimeout.current);
               overlayTimeout.current = setTimeout(() => setShowScrollOverlay(false), 1500);
             }
           } else if (scrollAction === 'brightness') {
             if (window.electronAPI && typeof window.electronAPI.changeBrightness === 'function') {
-              window.electronAPI.changeBrightness(direction).catch(err => {
+              window.electronAPI.changeBrightness(direction).then((percent) => {
+                if (typeof percent === 'number' && Number.isFinite(percent)) {
+                  setScrollValue(Math.min(Math.max(percent, 0), 100));
+                }
+              }).catch(err => {
                 console.error("Brightness IPC failed:", err);
               });
-              setScrollValue(prev => (direction === 'up' ? Math.min(prev + 10, 100) : Math.max(prev - 10, 0)));
               setShowScrollOverlay(true);
               if (overlayTimeout.current) clearTimeout(overlayTimeout.current);
               overlayTimeout.current = setTimeout(() => setShowScrollOverlay(false), 1500);
@@ -267,6 +525,42 @@ export default function Island() {
     };
   }, []);
 
+  useEffect(() => {
+    loadCalendarEvents();
+  }, []);
+
+  useEffect(() => {
+    if (view === 'todo_calendar' || view === 'todo_calendar_events') {
+      loadCalendarEvents();
+    }
+  }, [view]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      try {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        const nowHMS = `${hh}:${mm}:${ss}`;
+
+        const todayIso = toIsoDate(now.getFullYear(), now.getMonth(), now.getDate());
+        const todays = Array.isArray(calendarEvents?.[todayIso]) ? calendarEvents[todayIso] : [];
+        const due = todays.find(ev => {
+          if (!ev?.time) return false;
+          if (/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(ev.time)) return ev.time === nowHMS;
+          if (/^([01]\d|2[0-3]):[0-5]\d$/.test(ev.time)) return ev.time === `${hh}:${mm}` && ss === '00';
+          return false;
+        });
+        if (due) startRinging({ isoDate: todayIso, ev: due });
+      } catch (err) {
+        console.error('Event ringing check failed:', err);
+      }
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, [calendarEvents, mode]);
+
   // Auto-revert view when island collapses
   useEffect(() => {
     if (mode !== 'large' && view !== 'home' && view !== 'dropbox') {
@@ -282,6 +576,8 @@ export default function Island() {
         case 'dropbox': return { width: 420, height: 380 };
         case 'todo': return { width: 420, height: 320 };
         case 'todo_timer': return { width: 280, height: 220 };
+        case 'todo_calendar': return { width: 360, height: 320 };
+        case 'todo_calendar_events': return { width: 430, height: 340 };
         case 'weather': return { width: 350, height: 220 };
         case 'weather_details': return { width: 350, height: 200 };
         case 'search_urls': return { width: 400, height: 210 };
@@ -357,6 +653,9 @@ export default function Island() {
         "battery-alerts": "true",
         "default-tab": "2",
         "island-border": "false",
+        "island-border-color": "#FAFAFA",
+        "island-border-thickness": "1",
+        "island-border-style": "solid",
         "hide-island-notactive": "false",
         "standby-mode": "false",
         "hour-format": "12-hr",
@@ -392,6 +691,9 @@ export default function Island() {
       // 3. Finally, update the React state from the consolidated localStorage
       setBatteryAlertsEnabled(localStorage.getItem("battery-alerts") !== "false");
       setIslandBorderEnabled(localStorage.getItem("island-border") === "true");
+      setIslandBorderColor(localStorage.getItem("island-border-color") || "#FAFAFA");
+      setIslandBorderThickness(Number(localStorage.getItem("island-border-thickness") || 1));
+      setIslandBorderStyle(localStorage.getItem("island-border-style") || "solid");
       setStandbyEnabled(localStorage.getItem("standby-mode") === "true");
       setLargeStandbyEnabled(localStorage.getItem("large-standby-mode") === "true");
       sethideNotActiveIslandEnabled(localStorage.getItem("hide-island-notactive") === "true");
@@ -816,6 +1118,16 @@ const handleDropToMove = async (e) => {
     return () => clearInterval(interval);
   }, [isTimerRunning, timerSeconds]);
 
+  useEffect(() => {
+    let interval;
+    if (isStopwatchRunning) {
+      interval = setInterval(() => {
+        setStopwatchSeconds(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isStopwatchRunning]);
+
   const formatTimer = (seconds) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -1076,6 +1388,13 @@ const handleDropToMove = async (e) => {
         if (infiniteScroll) setView('weather');
       }
       if (e.key === 'ArrowDown') setView('todo_timer');
+      if (e.key === 'ArrowUp') setView('todo_calendar');
+    } else if (view === 'todo_calendar') {
+      if (e.key === 'ArrowDown') setView('todo');
+      if (e.key === 'Escape') setView('todo');
+    } else if (view === 'todo_calendar_events') {
+      if (e.key === 'ArrowDown') setView('todo_calendar');
+      if (e.key === 'Escape') setView('todo_calendar');
     } else if (view === 'todo_timer') {
       if (e.key === 'ArrowUp') setView('todo');
     } else if (view === 'dropbox') {
@@ -1144,6 +1463,7 @@ const handleDropToMove = async (e) => {
         '--island-position': `${islandPosition}px`,
         display: "flex",
         alignItems: "center",
+        opacity: hideNotActiveIslandEnabled && mode === 'still' ? 0 : opacity,
         backgroundImage: (view === 'weather' || view === 'weather_details') 
           ? (getWeatherStyles().bgColor.includes('gradient') ? getWeatherStyles().bgColor : 'none') 
           : `url('${bgImage}')`,
@@ -1153,7 +1473,7 @@ const handleDropToMove = async (e) => {
         justifyContent: "center",
         overflow: "hidden",
         fontFamily: theme === "win95" ? "w95" : "OpenRunde",
-        border: theme === "win95" ? "2px solid rgb(254, 254, 254)" : islandBorderEnabled ? (alert ? `1px solid rgba(255, 38, 0, 0.34)` : bluetoothAlert ? `1px solid rgba(0, 150, 255, 0.34)` : chargingAlert ? `1px solid rgba(3, 196, 3, 0.301)` : hideNotActiveIslandEnabled ? "none" : `1px solid color-mix(in srgb, ${localStorage.getItem("text-color")}, transparent 70%)`) : "none",
+        border: theme === "win95" ? "2px solid rgb(254, 254, 254)" : islandBorderEnabled ? (alert ? `${islandBorderThickness}px ${islandBorderStyle} rgba(255, 38, 0, 0.34)` : bluetoothAlert ? `${islandBorderThickness}px ${islandBorderStyle} rgba(0, 150, 255, 0.34)` : chargingAlert ? `${islandBorderThickness}px ${islandBorderStyle} rgba(3, 196, 3, 0.301)` : hideNotActiveIslandEnabled ? "none" : `${islandBorderThickness}px ${islandBorderStyle} ${islandBorderColor}`) : "none",
         borderColor:
           theme === "win95"
             ? "#FFFFFF #808080 #808080 #FFFFFF"
@@ -1175,6 +1495,116 @@ const handleDropToMove = async (e) => {
         zIndex: 9999
       }}
     >
+      {ringingEvent && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          zIndex: 250,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'auto'
+        }}
+        onMouseEnter={() => setShowControls(true)}
+        onMouseLeave={() => setShowControls(false)}
+        >
+          <div
+            onClick={() => {
+              setSelectedCalendarDate(ringingEvent.isoDate);
+              setMode('large');
+              setView('todo_calendar_events');
+              setLastInteraction(Date.now());
+              loadCalendarEvents();
+            }}
+            style={{
+            width: '92%',
+            height: 34,
+            borderRadius: 999,
+            background: 'rgba(255,255,255,0.08)',
+            border: '1px solid rgba(255,255,255,0.10)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '0 14px',
+            backdropFilter: 'blur(10px)',
+            cursor: 'pointer'
+          }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.85 }}>
+              {ringingEvent.time || '--:--'}
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+              {ringingEvent.text}
+            </div>
+          </div>
+          {showControls && (
+            <div style={{ 
+              position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', 
+              display: 'flex', gap: 4, zIndex: 10,
+              padding: '3px', borderRadius: 20,
+              background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255,255,255,0.1)'
+            }}>
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRingingEvent(prev => {
+                    const newMs = prev.remainingMs + 60000;
+                    if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+                    ringTimeoutRef.current = setTimeout(async () => {
+                      await stopRingingNow({ isoDate: prev.isoDate, eventId: prev.id });
+                    }, newMs);
+                    return { ...prev, remainingMs: newMs };
+                  });
+                }} 
+                style={{ 
+                  width: 26, height: 18, borderRadius: 10, background: 'rgba(255,255,255,0.08)', 
+                  color: 'white', fontSize: 8, fontWeight: 900, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+              >
+                +1M
+              </div>
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRingingEvent(prev => {
+                    const newMs = prev.remainingMs + 300000;
+                    if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+                    ringTimeoutRef.current = setTimeout(async () => {
+                      await stopRingingNow({ isoDate: prev.isoDate, eventId: prev.id });
+                    }, newMs);
+                    return { ...prev, remainingMs: newMs };
+                  });
+                }} 
+                style={{ 
+                  width: 26, height: 18, borderRadius: 10, background: 'rgba(255,255,255,0.08)', 
+                  color: 'white', fontSize: 8, fontWeight: 900, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+              >
+                +5M
+              </div>
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  stopRingingNow({ isoDate: ringingEvent.isoDate, eventId: ringingEvent.id });
+                }} 
+                style={{ 
+                  width: 18, height: 18, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.9)', 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 1)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.9)'}
+              >
+                <X size={10} color="white" strokeWidth={3} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {/*Quickview*/}
       {(mode === "quick" || (mode === "still" && isPlaying)) ? (
         <>
@@ -1487,13 +1917,30 @@ const handleDropToMove = async (e) => {
             view === 'search' ? 'translateX(100%)' :
               view === 'music' ? 'translateX(-100%)' :
                 view === 'dropbox' ? 'translateY(-100%)' :
-                  (prevView === 'search' && view === 'home') ? 'translateX(0)' :
+                  view === 'clipboard' ? 'translateY(100%)' :
+                    (prevView === 'search' && view === 'home') ? 'translateX(0)' :
                     (prevView === 'music' && view === 'home') ? 'translateX(0)' :
                       'translate(0,0)',
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           pointerEvents: view === 'home' && mode === 'large' ? 'auto' : 'none',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
         }}>
+
+          <div
+            onClick={() => window.electronAPI?.openSettings?.()}
+            style={{
+              position: 'absolute',
+              right: 12,
+              bottom: 10,
+              cursor: 'pointer',
+              opacity: 0.25,
+              transition: 'opacity 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.25'}
+          >
+            <Settings size={12} color={textColor} />
+          </div>
 
           {/* Clock on Left */}
           <div style={{ position: 'absolute', top: 15, left: 25, right: 25, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pointerEvents: 'none' }}>
@@ -1863,7 +2310,7 @@ const handleDropToMove = async (e) => {
                     setNewUrlData({ name: '', url: '' });
                     setEditingUrlIndex(null);
                   }}
-                  style={{ flex: 1, padding: '10px', borderRadius: 12, background: 'rgba(74, 222, 128, 0.2)', color: '#4ade80', fontSize: 12, fontWeight: 700, textAlign: 'center', cursor: 'pointer' }}
+                  style={{ flex: 1, padding: '10px', borderRadius: 12, background: 'rgba(255, 255, 255, 0.08)', color: '#ffffff', fontSize: 12, fontWeight: 700, textAlign: 'center', cursor: 'pointer' }}
                 >
                   SAVE
                 </div>
@@ -1873,7 +2320,7 @@ const handleDropToMove = async (e) => {
                     setNewUrlData({ name: '', url: '' });
                     setEditingUrlIndex(null);
                   }}
-                  style={{ flex: 1, padding: '10px', borderRadius: 12, background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: 12, fontWeight: 700, textAlign: 'center', cursor: 'pointer' }}
+                  style={{ flex: 1, padding: '10px', borderRadius: 12, background: 'rgba(239, 68, 68, 0.14)', color: '#ef4444', fontSize: 12, fontWeight: 800, textAlign: 'center', cursor: 'pointer' }}
                 >
                   CANCEL
                 </div>
@@ -1994,7 +2441,13 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'todo' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'todo' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'todo' && mode === 'large') ? 'translate(0,0)' : (view === 'todo_timer' ? 'translateY(-100%)' : 'translateX(100%)'),
+          transform: (view === 'todo' && mode === 'large')
+            ? 'translate(0,0)'
+            : (view === 'todo_timer')
+              ? 'translateY(-100%)'
+              : (view === 'todo_calendar' || view === 'todo_calendar_events')
+                ? 'translateY(100%)'
+                : 'translateX(100%)',
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
         }}>
@@ -2026,8 +2479,8 @@ const handleDropToMove = async (e) => {
                       width: 20, 
                       height: 20, 
                       borderRadius: 6, 
-                      border: `2px solid ${todo.completed ? '#4ade80' : 'rgba(255,255,255,0.2)'}`,
-                      background: todo.completed ? '#4ade80' : 'transparent',
+                      border: `2px solid ${todo.completed ? '#ffffff' : 'rgba(255,255,255,0.2)'}`,
+                      background: todo.completed ? 'rgba(255,255,255,0.9)' : 'transparent',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -2036,7 +2489,7 @@ const handleDropToMove = async (e) => {
                       flexShrink: 0
                     }}
                   >
-                    {todo.completed && <Zap size={12} color="black" fill="black" />}
+                    {todo.completed && <Check size={12} color="black" />}
                   </div>
 
                   <span style={{ 
@@ -2082,6 +2535,286 @@ const handleDropToMove = async (e) => {
           </div>
         </div>
 
+        {/* Todo Calendar View */}
+        <div style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          opacity: (view === 'todo_calendar' && mode === 'large') ? 1 : 0,
+          pointerEvents: (view === 'todo_calendar' && mode === 'large') ? 'auto' : 'none',
+          transform: (view === 'todo_calendar' && mode === 'large') ? 'translate(0,0)' : (view === 'todo' ? 'translateY(100%)' : 'translateY(-100%)'),
+          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
+        }}>
+          <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>CALENDAR</div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div
+              onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+              style={{ cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.2s ease' }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.4'}
+            >
+              <ChevronLeft size={18} color={textColor} />
+            </div>
+
+            <div style={{ fontSize: 14, fontWeight: 700, opacity: 0.9 }}>{formatMonthTitle(calendarMonth)}</div>
+
+            <div
+              onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+              style={{ cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.2s ease' }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.4'}
+            >
+              <ChevronRight size={18} color={textColor} />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 10 }}>
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => (
+              <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, opacity: 0.35 }}>{d}</div>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+            {Array.from({ length: startWeekday(calendarMonth) }).map((_, idx) => (
+              <div key={`pad-${idx}`} />
+            ))}
+            {Array.from({ length: daysInMonth(calendarMonth) }).map((_, idx) => {
+              const day = idx + 1;
+              const iso = toIsoDate(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
+              const hasEvents = Array.isArray(calendarEvents?.[iso]) && calendarEvents[iso].length > 0;
+              const isSelected = iso === selectedCalendarDate;
+              const isToday = iso === getTodayIso();
+
+              return (
+                <div
+                  key={iso}
+                  onClick={() => {
+                    setSelectedCalendarDate(iso);
+                    setView('todo_calendar_events');
+                  }}
+                  style={{
+                    width: '100%',
+                    aspectRatio: '1 / 1',
+                    borderRadius: 9,
+                    background: isSelected ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.04)',
+                    border: isSelected ? '1px solid rgba(255,255,255,0.15)' : '1px solid rgba(255,255,255,0.05)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 3,
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <div style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: isToday ? 'rgba(59, 130, 246, 0.25)' : 'transparent',
+                    border: isToday ? '1px solid rgba(59, 130, 246, 0.55)' : '1px solid transparent'
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.92, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{day}</div>
+                  </div>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: hasEvents ? '#ffffff' : 'transparent' }} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Todo Calendar Events View */}
+        <div style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          opacity: (view === 'todo_calendar_events' && mode === 'large') ? 1 : 0,
+          pointerEvents: (view === 'todo_calendar_events' && mode === 'large') ? 'auto' : 'none',
+          transform: (view === 'todo_calendar_events' && mode === 'large') ? 'translate(0,0)' : 'translateY(-100%)',
+          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div
+              onClick={() => setView('todo_calendar')}
+              style={{ cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.2s ease', display: 'flex', alignItems: 'center', gap: 8 }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.4'}
+            >
+              <ChevronLeft size={18} color={textColor} />
+              <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.6, letterSpacing: 1.4 }}>EVENTS</div>
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, opacity: 0.9 }}>{selectedCalendarDate}</div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 5 }}>
+            {(Array.isArray(calendarEvents?.[selectedCalendarDate]) ? calendarEvents[selectedCalendarDate] : []).length === 0 ? (
+              <div style={{ opacity: 0.3, fontSize: 13 }}>No events</div>
+            ) : (
+              (calendarEvents[selectedCalendarDate] || []).map((ev) => {
+                const isEditing = editingCalendarEventId === ev.id;
+                return (
+                  <div key={ev.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 12px', borderRadius: 14,
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.05)'
+                  }}>
+                    <div style={{
+                      minWidth: 52,
+                      textAlign: 'left',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      opacity: 0.75
+                    }}>
+                      {ev.time || '--:--'}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {isEditing ? (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            value={editingCalendarEventText}
+                            onChange={(e) => setEditingCalendarEventText(e.target.value)}
+                            style={{ flex: 1, padding: '8px 10px', borderRadius: 12, border: 'none', outline: 'none', background: 'rgba(255,255,255,0.08)', color: 'white', fontSize: 13 }}
+                          />
+                          <div style={{ display: 'flex', gap: 0, background: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: '2px 4px', alignItems: 'center' }}>
+                            <input
+                              type="text"
+                              value={editingCalendarEventTime}
+                              onChange={(e) => setEditingCalendarEventTime(formatTimeInput(e.target.value))}
+                              placeholder="HH:MM"
+                              style={{ width: 55, padding: '6px 5px', borderRadius: 10, border: 'none', outline: 'none', background: 'transparent', color: 'white', fontSize: 13, textAlign: 'center' }}
+                            />
+                            <div 
+                              onClick={() => setEditingCalendarEventAmPm(prev => prev === 'AM' ? 'PM' : 'AM')}
+                              style={{ 
+                                padding: '3px 6px', borderRadius: 10, background: 'rgba(255,255,255,0.1)', 
+                                fontSize: 9, fontWeight: 900, cursor: 'pointer', color: 'white',
+                                userSelect: 'none'
+                              }}
+                            >
+                              {editingCalendarEventAmPm}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 13, fontWeight: 700, opacity: 0.9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.text}</div>
+                      )}
+                    </div>
+
+                    {isEditing ? (
+                      <>
+                        <div
+                          onClick={async () => {
+                            const text = editingCalendarEventText.trim();
+                            let t = (editingCalendarEventTime || '').trim();
+                            if (t) {
+                              t = convertTo24Hour(t, editingCalendarEventAmPm);
+                            }
+                            const time = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(t) ? t : '';
+                            if (!text) return;
+                            await updateCalendarEvent(ev.id, { text, time });
+                            setEditingCalendarEventId(null);
+                          }}
+                          style={{ cursor: 'pointer', opacity: 0.35, transition: 'opacity 0.2s ease' }}
+                          onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                          onMouseLeave={(e) => e.currentTarget.style.opacity = '0.35'}
+                        >
+                          <Check size={16} color="#ffffff" />
+                        </div>
+                        <div
+                          onClick={() => setEditingCalendarEventId(null)}
+                          style={{ cursor: 'pointer', opacity: 0.35, transition: 'opacity 0.2s ease' }}
+                          onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                          onMouseLeave={(e) => e.currentTarget.style.opacity = '0.35'}
+                        >
+                          <X size={16} color="#ef4444" />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div
+                          onClick={() => {
+                            setEditingCalendarEventId(ev.id);
+                            setEditingCalendarEventText(ev.text || '');
+                            const parsed = parse24to12(ev.time || '');
+                            setEditingCalendarEventTime(parsed.time);
+                            setEditingCalendarEventAmPm(parsed.amPm);
+                          }}
+                          style={{ cursor: 'pointer', opacity: 0.28, transition: 'opacity 0.2s ease' }}
+                          onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                          onMouseLeave={(e) => e.currentTarget.style.opacity = '0.28'}
+                        >
+                          <Edit2 size={15} color={textColor} />
+                        </div>
+                        <Trash2
+                          size={15}
+                          color="#ef4444"
+                          style={{ cursor: 'pointer', opacity: 0.28, transition: 'opacity 0.2s ease' }}
+                          onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                          onMouseLeave={(e) => e.currentTarget.style.opacity = '0.28'}
+                          onClick={() => deleteCalendarEventByDate(selectedCalendarDate, ev.id)}
+                        />
+                      </>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+            <input
+              type="text"
+              value={calendarEventInput}
+              onChange={(e) => setCalendarEventInput(e.target.value)}
+              placeholder="Add event..."
+              style={{ flex: 1, padding: '10px 15px', borderRadius: 20, border: 'none', outline: 'none', background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: 13 }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') addCalendarEvent();
+                if (e.key === 'Escape') setView('todo_calendar');
+              }}
+            />
+            <div style={{ display: 'flex', gap: 0, background: 'rgba(255,255,255,0.1)', borderRadius: 20, padding: '2px 4px', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={calendarEventTimeInput}
+                onChange={(e) => setCalendarEventTimeInput(formatTimeInput(e.target.value))}
+                placeholder="HH:MM"
+                style={{ width: 60, padding: '8px 8px', borderRadius: 16, border: 'none', outline: 'none', background: 'transparent', color: 'white', fontSize: 13, textAlign: 'center' }}
+              />
+              <div 
+                onClick={() => setCalendarEventAmPm(prev => prev === 'AM' ? 'PM' : 'AM')}
+                style={{ 
+                  padding: '4px 8px', borderRadius: 16, background: 'rgba(255,255,255,0.1)', 
+                  fontSize: 10, fontWeight: 900, cursor: 'pointer', color: 'white',
+                  userSelect: 'none', transition: 'all 0.2s ease'
+                }}
+              >
+                {calendarEventAmPm}
+              </div>
+            </div>
+            <div
+              onClick={addCalendarEvent}
+              style={{
+                width: 44, height: 44, borderRadius: 999,
+                background: 'rgba(255, 255, 255, 0.10)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', transition: 'transform 0.15s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.06)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              <Plus size={20} color="#ffffff" />
+            </div>
+          </div>
+        </div>
+
         {/* Todo Timer View */}
         <div style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
@@ -2090,61 +2823,115 @@ const handleDropToMove = async (e) => {
           transform: (view === 'todo_timer' && mode === 'large') ? 'translate(0,0)' : 'translateY(100%)',
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          padding: '20px'
+          padding: '40px 20px 20px 20px'
         }}>
+          <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <TimerIcon size={16} color={textColor} opacity={0.7} />
+            <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>WATCH</div>
+          </div>
+
           <div style={{
             width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15,
             padding: '10px 20px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <TimerIcon size={18} color={textColor} opacity={0.7} />
-              <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>TIMER</span>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div
+                onClick={() => setWatchMode('stopwatch')}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 999,
+                  background: watchMode === 'stopwatch' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.10)',
+                  cursor: 'pointer',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: 1.2,
+                  opacity: watchMode === 'stopwatch' ? 0.95 : 0.55
+                }}
+              >
+                STOPWATCH
+              </div>
+              <div
+                onClick={() => setWatchMode('timer')}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 999,
+                  background: watchMode === 'timer' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.10)',
+                  cursor: 'pointer',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: 1.2,
+                  opacity: watchMode === 'timer' ? 0.95 : 0.55
+                }}
+              >
+                TIMER
+              </div>
             </div>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-              <div 
-                onClick={() => setTimerSeconds(prev => Math.max(0, prev - 60))}
-                style={{ cursor: 'pointer', opacity: 0.3, transition: 'opacity 0.2s' }}
-                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
-              >
-                <ChevronDown size={20} color={textColor} />
-              </div>
-              
-              <div style={{ fontSize: 42, fontWeight: 700, letterSpacing: -1, fontVariantNumeric: 'tabular-nums' }}>
-                {formatTimer(timerSeconds)}
-              </div>
+            {watchMode === 'timer' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                <div 
+                  onClick={() => setTimerSeconds(prev => Math.max(0, prev - 60))}
+                  style={{ cursor: 'pointer', opacity: 0.3, transition: 'opacity 0.2s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
+                >
+                  <ChevronDown size={20} color={textColor} />
+                </div>
+                
+                <div style={{ fontSize: 42, fontWeight: 700, letterSpacing: -1, fontVariantNumeric: 'tabular-nums' }}>
+                  {formatTimer(timerSeconds)}
+                </div>
 
-              <div 
-                onClick={() => setTimerSeconds(prev => prev + 60)}
-                style={{ cursor: 'pointer', opacity: 0.3, transition: 'opacity 0.2s' }}
-                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
-              >
-                <ChevronUp size={20} color={textColor} />
+                <div 
+                  onClick={() => setTimerSeconds(prev => prev + 60)}
+                  style={{ cursor: 'pointer', opacity: 0.3, transition: 'opacity 0.2s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
+                >
+                  <ChevronUp size={20} color={textColor} />
+                </div>
               </div>
-            </div>
+            ) : (
+              <div style={{ fontSize: 42, fontWeight: 700, letterSpacing: -1, fontVariantNumeric: 'tabular-nums' }}>
+                {formatTimer(stopwatchSeconds)}
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 20 }}>
               <div 
-                onClick={() => setIsTimerRunning(!isTimerRunning)}
+                onClick={() => {
+                  if (watchMode === 'timer') {
+                    setIsTimerRunning(!isTimerRunning);
+                  } else {
+                    setIsStopwatchRunning(!isStopwatchRunning);
+                  }
+                }}
                 style={{ 
-                  width: 40, height: 40, borderRadius: '50%', background: isTimerRunning ? 'rgba(239, 68, 68, 0.15)' : 'rgba(74, 222, 128, 0.15)',
+                  width: 44, height: 44, borderRadius: '50%', background: (watchMode === 'timer' ? isTimerRunning : isStopwatchRunning) ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255, 255, 255, 0.10)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s ease'
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
                 onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
               >
-                {isTimerRunning ? <Pause size={20} color="#ef4444" /> : <Play size={20} color="#4ade80" style={{ transform: 'translateX(1px)' }} />}
+                {(watchMode === 'timer' ? isTimerRunning : isStopwatchRunning)
+                  ? <Pause size={20} color="#ef4444" />
+                  : <Play size={20} color="#ffffff" style={{ transform: 'translateX(1px)' }} />}
               </div>
               
               <div 
                 onClick={() => {
-                  setIsTimerRunning(false);
-                  setTimerSeconds(0);
+                  if (watchMode === 'timer') {
+                    setIsTimerRunning(false);
+                    setTimerSeconds(0);
+                  } else {
+                    setIsStopwatchRunning(false);
+                    setStopwatchSeconds(0);
+                  }
                 }}
                 style={{ 
-                  width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.1)',
+                  width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.1)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s ease'
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
@@ -2186,7 +2973,7 @@ const handleDropToMove = async (e) => {
               onDragOver={(e) => { e.preventDefault(); setIsDraggingOver('copy'); }}
               onDragLeave={() => setIsDraggingOver(null)}
               onDrop={handleDropToCopy}
-              style={{ flex: 1, border: `2px dashed ${isDraggingOver === 'copy' ? '#4ade80' : 'rgba(255,255,255,0.15)'}`, borderRadius: 15, display: 'flex', flexDirection: 'column', background: isDraggingOver === 'copy' ? 'rgba(74, 222, 128, 0.05)' : 'rgba(255,255,255,0.02)', transition: 'all 0.2s ease', overflow: 'hidden' }}>
+              style={{ flex: 1, border: `2px dashed ${isDraggingOver === 'copy' ? '#ffffff' : 'rgba(255,255,255,0.15)'}`, borderRadius: 15, display: 'flex', flexDirection: 'column', background: isDraggingOver === 'copy' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255,255,255,0.02)', transition: 'all 0.2s ease', overflow: 'hidden' }}>
               <div style={{ padding: '6px', borderBottom: '1px solid rgba(255,255,255,0.05)', textAlign: 'center', fontSize: 9, fontWeight: 700, opacity: 0.6 }}>COPY TO</div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '6px' }}>
                 {tempFiles.filter(f => f.type === 'copy').map((file, idx) => (

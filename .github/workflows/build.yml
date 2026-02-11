@@ -1,0 +1,76 @@
+name: Multi-Platform Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        platform: [macos, windows, linux]
+        include:
+          - platform: macos
+            os: macos-latest
+          - platform: windows
+            os: windows-latest
+          - platform: linux
+            os: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Application (Windows & Linux)
+        if: matrix.platform != 'macos'
+        run: npm run make
+
+      - name: Build Application (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          npm run make -- --arch=x64
+          npm run make -- --arch=arm64
+
+      - name: Upload Windows Artifacts
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ripple-Windows
+          path: out/make/wix/x64/*.msi
+          if-no-files-found: error
+
+      - name: Upload macOS Artifacts
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ripple-macOS
+          path: |
+            out/make/**/*.dmg
+            out/make/zip/darwin/**/*.zip
+          if-no-files-found: error
+
+      - name: Upload Linux Artifacts
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ripple-Linux
+          path: |
+            out/make/deb/**/*.deb
+            out/make/rpm/**/*.rpm
+          if-no-files-found: error
+          

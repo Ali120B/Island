@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSystemMedia: () => ipcRenderer.invoke('get-system-media'),
   getBluetoothStatus: () => ipcRenderer.invoke('get-bluetooth-status'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  openSettings: () => ipcRenderer.send('open-settings'),
+  hideIsland: () => ipcRenderer.send('hide-island'),
+  quitApp: () => ipcRenderer.send('quit-app'),
   log: (msg) => ipcRenderer.invoke('log', msg),
   writeFilesToClipboard: (filePaths) => ipcRenderer.invoke('write-files-to-clipboard', filePaths),
   getTempFiles: () => ipcRenderer.invoke('get-temp-files'),
@@ -29,5 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   changeVolume: (direction) => ipcRenderer.invoke('change-volume', direction),
   changeBrightness: (direction) => ipcRenderer.invoke('change-brightness', direction),
   saveTodo: (todos) => ipcRenderer.invoke('save-todo', todos),
-  getTodo: () => ipcRenderer.invoke('get-todo')
+  getTodo: () => ipcRenderer.invoke('get-todo'),
+  getCalendarEvents: () => ipcRenderer.invoke('get-calendar-events'),
+  saveCalendarEvents: (events) => ipcRenderer.invoke('save-calendar-events', events)
 });

@@ -3,6 +3,9 @@ import React, { useState, useEffect } from 'react';
 export default function Settings() {
     const [batteryAlerts, setBatteryAlerts] = useState(localStorage.getItem("battery-alerts") !== "false");
     const [islandBorder, setIslandBorder] = useState(localStorage.getItem("island-border") === "true");
+    const [borderColor, setBorderColor] = useState(localStorage.getItem("island-border-color") || "#FAFAFA");
+    const [borderThickness, setBorderThickness] = useState(Number(localStorage.getItem("island-border-thickness") || 1));
+    const [borderStyle, setBorderStyle] = useState(localStorage.getItem("island-border-style") || "solid");
     const [openRouterKey, setOpenRouterKey] = useState(localStorage.getItem("openrouter-key") || "");
     const [autoRevertTime, setAutoRevertTime] = useState(Number(localStorage.getItem("auto-revert-time") || 5000));
     const [weatherUnit, setWeatherUnit] = useState(localStorage.getItem("weather-unit") || "f");
@@ -38,6 +41,9 @@ export default function Settings() {
                     // Update UI state from remote
                     if (remoteSettings["battery-alerts"] !== undefined) setBatteryAlerts(remoteSettings["battery-alerts"] !== "false");
                     if (remoteSettings["island-border"] !== undefined) setIslandBorder(remoteSettings["island-border"] === "true");
+                    if (remoteSettings["island-border-color"] !== undefined) setBorderColor(remoteSettings["island-border-color"]);
+                    if (remoteSettings["island-border-thickness"] !== undefined) setBorderThickness(Number(remoteSettings["island-border-thickness"]));
+                    if (remoteSettings["island-border-style"] !== undefined) setBorderStyle(remoteSettings["island-border-style"]);
                     if (remoteSettings["openrouter-key"] !== undefined) setOpenRouterKey(remoteSettings["openrouter-key"]);
                     if (remoteSettings["auto-revert-time"] !== undefined) setAutoRevertTime(Number(remoteSettings["auto-revert-time"]));
                     if (remoteSettings["weather-unit"] !== undefined) setWeatherUnit(remoteSettings["weather-unit"]);
@@ -99,6 +105,9 @@ export default function Settings() {
             const settingsToSave = {
                 "battery-alerts": String(batteryAlerts),
                 "island-border": String(islandBorder),
+                "island-border-color": borderColor,
+                "island-border-thickness": String(borderThickness),
+                "island-border-style": borderStyle,
                 "openrouter-key": openRouterKey,
                 "auto-revert-time": String(autoRevertTime),
                 "weather-unit": weatherUnit,
@@ -308,6 +317,42 @@ export default function Settings() {
                     <h3 style={{ margin: '0 0 20px 0', fontSize: 16, fontWeight: 600, color: '#f472b6', display: 'flex', alignItems: 'center', gap: 8 }}>
                         Appearance
                     </h3>
+
+                    <div style={{ marginBottom: 20 }}>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>Border Color</label>
+                        <input
+                            type="color"
+                            value={borderColor}
+                            onChange={(e) => { setBorderColor(e.target.value); saveSetting("island-border-color", e.target.value); }}
+                            style={{ width: '100%', height: 40, background: '#1f1f1f', border: '1px solid #333', borderRadius: 10, padding: 6, cursor: 'pointer' }}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: 20 }}>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>
+                            Border Thickness <span>{borderThickness}px</span>
+                        </label>
+                        <input
+                            type="range" min="0" max="6" step="1"
+                            value={borderThickness}
+                            onChange={(e) => { const v = parseInt(e.target.value); setBorderThickness(v); saveSetting("island-border-thickness", v); }}
+                            style={{ width: '100%', accentColor: '#f472b6' }}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: 20 }}>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>Border Style</label>
+                        <select
+                            value={borderStyle}
+                            onChange={(e) => { setBorderStyle(e.target.value); saveSetting("island-border-style", e.target.value); }}
+                            style={{ width: '100%', background: '#1f1f1f', border: '1px solid #333', borderRadius: 10, padding: '10px 15px', color: 'white', outline: 'none' }}
+                        >
+                            <option value="solid">Solid</option>
+                            <option value="dashed">Dashed</option>
+                            <option value="dotted">Dotted</option>
+                            <option value="double">Double</option>
+                        </select>
+                    </div>
                     
                     <div style={{ marginBottom: 20 }}>
                         <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>
@@ -394,7 +439,55 @@ export default function Settings() {
                 </section>
             </div>
             
-            <div style={{ marginTop: 40, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ marginTop: 40, display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <button 
+                    onClick={() => window.electronAPI?.hideIsland?.()}
+                    style={{
+                        padding: '10px 20px',
+                        background: 'rgba(255,255,255,0.06)',
+                        color: '#fff',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        borderRadius: '10px',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                    }}
+                >
+                    Hide Island
+                </button>
+
+                <button 
+                    onClick={() => window.electronAPI?.quitApp?.()}
+                    style={{
+                        padding: '10px 20px',
+                        background: 'rgba(239, 68, 68, 0.14)',
+                        color: '#fff',
+                        border: '1px solid rgba(239, 68, 68, 0.25)',
+                        borderRadius: '10px',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.22)';
+                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.35)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.14)';
+                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+                    }}
+                >
+                    Quit App
+                </button>
+
                 <button 
                     onClick={handleResetAll}
                     style={{

@@ -1,7 +1,10 @@
 "use strict";
-const { app, BrowserWindow, screen, ipcMain, shell, Tray, Menu, nativeImage, clipboard } = require("electron");
+const { app, BrowserWindow, screen, ipcMain, shell, Tray, Menu, nativeImage, clipboard, dialog } = require("electron");
 const path = require("node:path");
 const fs = require("fs");
+
+// Disable autoplay restrictions
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 // Setup
 let tray = null;
@@ -164,6 +167,12 @@ const createSettingsWindow = () => {
 };
 
 app.whenReady().then(() => {
+  if (!app.requestSingleInstanceLock()) {
+    dialog.showErrorBox('Island is already running', 'Another instance of Island is already running. Please close it first.');
+    app.quit();
+    return;
+  }
+
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -222,6 +231,22 @@ ipcMain.on('open-settings', () => {
   createSettingsWindow();
 });
 
+ipcMain.on('hide-island', () => {
+  try {
+    if (mainWindow) mainWindow.hide();
+  } catch (err) {
+    console.error('[Main] Failed to hide island:', err);
+  }
+});
+
+ipcMain.on('quit-app', () => {
+  try {
+    app.quit();
+  } catch (err) {
+    console.error('[Main] Failed to quit app:', err);
+  }
+});
+
 ipcMain.handle('save-settings', async (event, settings) => {
   try {
     const docsDir = path.join(app.getPath('documents'), 'Island');
@@ -251,19 +276,44 @@ ipcMain.handle('get-settings', async () => {
 ipcMain.handle('change-volume', (event, direction) => {
   const key = direction === 'up' ? '[char]175' : '[char]174';
   const script = `(New-Object -ComObject WScript.Shell).SendKeys(${key})`;
-  exec(`powershell -Command "${script}"`);
+  exec(`powershell -NoProfile -Command "${script}"`);
+  return null;
 });
 
 ipcMain.handle('change-brightness', (event, direction) => {
-  const increment = direction === 'up' ? 10 : -10;
-  const script = `
-    $brightness = (Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightness).CurrentBrightness
-    $newBrightness = $brightness + ${increment}
-    if ($newBrightness -gt 100) { $newBrightness = 100 }
-    if ($newBrightness -lt 0) { $newBrightness = 0 }
-    (Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, $newBrightness)
-  `;
-  exec(`powershell -Command "${script.replace(/\n/g, ' ')}"`);
+  return new Promise((resolve) => {
+    const increment = direction === 'up' ? 10 : -10;
+    const psScript = `
+$ErrorActionPreference = 'Stop'
+$brightness = (Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightness).CurrentBrightness
+$newBrightness = $brightness + ${increment}
+if ($newBrightness -gt 100) { $newBrightness = 100 }
+if ($newBrightness -lt 0) { $newBrightness = 0 }
+(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, $newBrightness) | Out-Null
+Write-Output $newBrightness
+`;
+
+    const tempPath = path.join(app.getPath('userData'), 'brightness-script.ps1');
+
+    try {
+      fs.writeFileSync(tempPath, psScript);
+    } catch (e) {
+      console.error('[Main] Failed to write brightness script:', e);
+      return resolve(null);
+    }
+
+    exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempPath}"`, { timeout: 6000 }, (err, stdout, stderr) => {
+      try { fs.unlinkSync(tempPath); } catch { }
+
+      if (err) {
+        console.error('[Main] change-brightness failed:', err.message);
+        if (stderr) console.error('[Main] change-brightness stderr:', stderr);
+        return resolve(null);
+      }
+      const n = Number(String(stdout).trim());
+      resolve(Number.isFinite(n) ? n : null);
+    });
+  });
 });
 
 ipcMain.handle('save-todo', async (event, todos) => {
@@ -290,6 +340,32 @@ ipcMain.handle('get-todo', async () => {
     console.error("Error getting todo:", err);
   }
   return [];
+});
+
+ipcMain.handle('get-calendar-events', async () => {
+  try {
+    const eventsPath = path.join(app.getPath('documents'), 'Island', 'calendar-events.json');
+    if (fs.existsSync(eventsPath)) {
+      const data = fs.readFileSync(eventsPath, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.error("Error getting calendar events:", err);
+  }
+  return {};
+});
+
+ipcMain.handle('save-calendar-events', async (event, events) => {
+  try {
+    const docsDir = path.join(app.getPath('documents'), 'Island');
+    if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir, { recursive: true });
+    const eventsPath = path.join(docsDir, 'calendar-events.json');
+    fs.writeFileSync(eventsPath, JSON.stringify(events, null, 2));
+    return true;
+  } catch (err) {
+    console.error("Error saving calendar events:", err);
+    return false;
+  }
 });
 
 ipcMain.handle('log', (event, message) => {
