@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Component } from 'react';
-import { Home, Music, MessageSquare, Cloud, Battery, BatteryLow, BatteryMedium, BatteryFull, Zap, ChevronLeft, ChevronRight, Sun, Moon, Box, Search, History, Trash2, X, Clipboard as ClipboardIcon, Volume2, VolumeX, Wind, Droplets, Thermometer, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Timer as TimerIcon, Pin, CloudRain, Plus, List, Edit2, Settings, Check } from 'lucide-react';
+import { Home, Music, MessageSquare, Cloud, Battery, BatteryLow, BatteryMedium, BatteryFull, Zap, ChevronLeft, ChevronRight, Sun, Moon, Box, Search, History, Trash2, X, Clipboard as ClipboardIcon, Volume2, VolumeX, Wind, Droplets, Thermometer, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Timer as TimerIcon, Pin, CloudRain, Plus, List, Edit2, Settings, Check, GripVertical, Calendar } from 'lucide-react';
 import { OpenAI } from "openai";
 import "./App.css";
 import lowBatteryIcon from "./assets/images/lowbattery.png";
@@ -26,6 +26,175 @@ function openApp(app) {
     window.alert("Failed to open app:", app, e);
   }
 }
+
+const AnalogClock = ({ size = 150, color = "#fff", style = "simple" }) => {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const secs = now.getSeconds();
+  const mins = now.getMinutes();
+  const hrs = now.getHours() % 12;
+
+  const secDeg = (secs / 60) * 360;
+  const minDeg = ((mins + secs / 60) / 60) * 360;
+  const hrDeg = ((hrs + mins / 60) / 12) * 360;
+
+  const renderSimple = () => (
+    <>
+      <circle cx="50" cy="50" r="48" stroke={color} strokeWidth="2" fill="none" opacity="0.2" />
+      {[...Array(12)].map((_, i) => (
+        <line
+          key={i}
+          x1="50" y1="5" x2="50" y2="10"
+          transform={`rotate(${i * 30} 50 50)`}
+          stroke={color} strokeWidth="2" opacity="0.5"
+        />
+      ))}
+      <line x1="50" y1="50" x2="50" y2="25" transform={`rotate(${hrDeg} 50 50)`} stroke={color} strokeWidth="3" strokeLinecap="round" />
+      <line x1="50" y1="50" x2="50" y2="15" transform={`rotate(${minDeg} 50 50)`} stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <line x1="50" y1="50" x2="50" y2="10" transform={`rotate(${secDeg} 50 50)`} stroke="#ef4444" strokeWidth="1" strokeLinecap="round" />
+      <circle cx="50" cy="50" r="2" fill={color} />
+    </>
+  );
+
+  const renderCyber = () => (
+    <>
+      <circle cx="50" cy="50" r="48" stroke={color} strokeWidth="1" fill="none" opacity="0.1" strokeDasharray="2 2" />
+      <circle cx="50" cy="50" r="42" stroke={color} strokeWidth="0.5" fill="none" opacity="0.05" />
+      {[...Array(60)].map((_, i) => (
+        <line
+          key={i}
+          x1="50" y1="2" x2="50" y2={i % 5 === 0 ? 8 : 4}
+          transform={`rotate(${i * 6} 50 50)`}
+          stroke={color} strokeWidth={i % 5 === 0 ? 1 : 0.5}
+          opacity={i % 5 === 0 ? 0.8 : 0.2}
+        />
+      ))}
+      {/* Neon Glow Hands */}
+      <line x1="50" y1="50" x2="50" y2="28" transform={`rotate(${hrDeg} 50 50)`} stroke={color} strokeWidth="4" strokeLinecap="butt" />
+      <line x1="50" y1="50" x2="50" y2="18" transform={`rotate(${minDeg} 50 50)`} stroke={color} strokeWidth="2.5" strokeLinecap="butt" />
+      <line x1="50" y1="50" x2="50" y2="8" transform={`rotate(${secDeg} 50 50)`} stroke="#00f2ff" strokeWidth="1" />
+      <rect x="47" y="47" width="6" height="6" fill={color} transform={`rotate(${secDeg} 50 50)`} />
+    </>
+  );
+
+  const renderMinimalist = () => (
+    <>
+      <circle cx="50" cy="50" r="2" fill={color} opacity="0.5" />
+      <line x1="50" y1="50" x2="50" y2="25" transform={`rotate(${hrDeg} 50 50)`} stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="50" y1="50" x2="50" y2="15" transform={`rotate(${minDeg} 50 50)`} stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="50" cy="10" r="1.5" fill={color} transform={`rotate(${secDeg} 50 50)`} />
+    </>
+  );
+
+  const renderCool = () => {
+    const getDotPos = (deg, radius) => {
+      const rad = (deg - 90) * (Math.PI / 180);
+      return {
+        x: 50 + radius * Math.cos(rad),
+        y: 50 + radius * Math.sin(rad)
+      };
+    };
+
+    const hrPos = getDotPos(hrDeg, 25);
+    const minPos = getDotPos(minDeg, 35);
+    const secPos = getDotPos(secDeg, 42);
+
+    return (
+      <>
+        <defs>
+          <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style={{ stopColor: color, stopOpacity: 1 }} />
+            <stop offset="100%" style={{ stopColor: '#4facfe', stopOpacity: 1 }} />
+          </linearGradient>
+        </defs>
+        <circle cx="50" cy="50" r="45" stroke="url(#grad1)" strokeWidth="2" fill="none" opacity="0.1" />
+        
+        {/* Hour Dot */}
+        <circle 
+          cx={hrPos.x} cy={hrPos.y} r="4" 
+          fill="url(#grad1)"
+        />
+        
+        {/* Minute Dot */}
+        <circle 
+          cx={minPos.x} cy={minPos.y} r="3" 
+          fill={color}
+          opacity="0.8"
+        />
+        
+        {/* Second Dot */}
+        <circle 
+          cx={secPos.x} cy={secPos.y} r="1.5" 
+          fill="#4facfe"
+        />
+
+        <circle cx="50" cy="50" r="1.5" fill={color} opacity="0.2" />
+      </>
+    );
+  };
+
+  const renderRetro = () => (
+    <>
+      <circle cx="50" cy="50" r="48" stroke={color} strokeWidth="3" fill="#f0f0f0" />
+      <circle cx="50" cy="50" r="44" stroke="#000" strokeWidth="1" fill="none" />
+      {[...Array(12)].map((_, i) => (
+        <text
+          key={i}
+          x="50"
+          y="15"
+          transform={`rotate(${i * 30} 50 50)`}
+          fill="#000"
+          fontSize="10"
+          fontWeight="bold"
+          textAnchor="middle"
+          style={{ transformOrigin: 'center', transform: `rotate(${-i * 30}deg)` }}
+        >
+          {i === 0 ? '12' : i}
+        </text>
+      ))}
+      <line x1="50" y1="50" x2="50" y2="30" transform={`rotate(${hrDeg} 50 50)`} stroke="#000" strokeWidth="4" strokeLinecap="butt" />
+      <line x1="50" y1="50" x2="50" y2="20" transform={`rotate(${minDeg} 50 50)`} stroke="#000" strokeWidth="2.5" strokeLinecap="butt" />
+      <line x1="50" y1="50" x2="50" y2="10" transform={`rotate(${secDeg} 50 50)`} stroke="#d00" strokeWidth="1" />
+      <circle cx="50" cy="50" r="2.5" fill="#000" />
+    </>
+  );
+
+  const renderModern = () => (
+    <>
+      <circle cx="50" cy="50" r="48" stroke={color} strokeWidth="0.5" fill="none" opacity="0.1" />
+      {[...Array(60)].map((_, i) => (
+        <line
+          key={i}
+          x1="50" y1="2" x2="50" y2={i % 5 === 0 ? 6 : 4}
+          transform={`rotate(${i * 6} 50 50)`}
+          stroke={color} strokeWidth={i % 5 === 0 ? 1 : 0.5}
+          opacity={i % 5 === 0 ? 0.5 : 0.1}
+        />
+      ))}
+      <rect x="49" y="25" width="2" height="25" rx="1" transform={`rotate(${hrDeg} 50 50)`} fill={color} />
+      <rect x="49.5" y="15" width="1" height="35" rx="0.5" transform={`rotate(${minDeg} 50 50)`} fill={color} />
+      <circle cx="50" cy="50" r="1.5" fill="#4facfe" />
+      <line x1="50" y1="50" x2="50" y2="5" transform={`rotate(${secDeg} 50 50)`} stroke="#4facfe" strokeWidth="0.5" opacity="0.8" />
+    </>
+  );
+
+  return (
+    <div style={{ width: size, height: size, position: 'relative' }}>
+      <svg width={size} height={size} viewBox="0 0 100 100">
+        {style === 'cyber' ? renderCyber() : 
+         style === 'minimalist' ? renderMinimalist() : 
+         style === 'cool' ? renderCool() : 
+         style === 'retro' ? renderRetro() :
+         style === 'modern' ? renderModern() :
+         renderSimple()}
+      </svg>
+    </div>
+  );
+};
 
 export default function Island() {
   const [time, setTime] = useState(null);
@@ -62,6 +231,11 @@ export default function Island() {
   const [aiModel, setAiModel] = useState(localStorage.getItem("ai-model") || "openai/gpt-3.5-turbo");
   const [customModel, setCustomModel] = useState(localStorage.getItem("custom-model") || "");
   const [scrollAction, setScrollAction] = useState(localStorage.getItem("scroll-action") || "volume");
+  const [clockStyle, setClockStyle] = useState(localStorage.getItem("clock-style") || "digital");
+  const [analogStyle, setAnalogStyle] = useState(localStorage.getItem("analog-style") || "simple");
+  const [clockFont, setClockFont] = useState(localStorage.getItem("clock-font") || "OpenRunde");
+  const [showWatchInIdle, setShowWatchInIdle] = useState(localStorage.getItem("show-watch-idle") !== "false");
+  const [showTimerBorder, setShowTimerBorder] = useState(localStorage.getItem("show-timer-border") !== "false");
   const [scrollValue, setScrollValue] = useState(0); // For the visual bar
   const [showScrollOverlay, setShowScrollOverlay] = useState(false);
   const overlayTimeout = useRef(null);
@@ -109,6 +283,114 @@ export default function Island() {
   const [pinnedUrls, setPinnedUrls] = useState(JSON.parse(localStorage.getItem("pinned-urls") || '["https://youtube.com", "https://whatsapp.com", "https://notion.so", "https://drive.google.com"]'));
   const [isEditingUrls, setIsEditingUrls] = useState(false);
   const [editingUrlIndex, setEditingUrlIndex] = useState(null);
+  const [showInIslandSettings, setShowInIslandSettings] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [layoutOrder, setLayoutOrder] = useState(() => {
+    const saved = localStorage.getItem("island-layout-order");
+    const defaultOrder = {
+      pages: ['weather', 'search', 'home', 'music', 'ai', 'todo'],
+      hiddenPages: [],
+      home: ['clipboard', 'dropbox'],
+      todo: ['calendar', 'timer'],
+      weather: ['details', 'main'],
+      search: ['urls', 'main']
+    };
+    if (!saved) return defaultOrder;
+    const parsed = JSON.parse(saved);
+    // Ensure all keys exist
+    return {
+      pages: parsed.pages || defaultOrder.pages,
+      hiddenPages: parsed.hiddenPages || defaultOrder.hiddenPages,
+      home: parsed.home || defaultOrder.home,
+      todo: parsed.todo || defaultOrder.todo,
+      weather: parsed.weather || defaultOrder.weather,
+      search: parsed.search || defaultOrder.search
+    };
+  });
+  const [expandedSections, setExpandedSections] = useState({ pages: true });
+  const settingsRef = useRef(null);
+
+  // Auto-close settings on click outside and reset search
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (showInIslandSettings && settingsRef.current && !settingsRef.current.contains(event.target)) {
+        setShowInIslandSettings(false);
+      }
+      
+      // If clicking outside while in search view, reset search
+      if (view === 'search' && !event.target.closest('input')) {
+        setSearchQuery('');
+        setSearchResults([]);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showInIslandSettings, view]);
+
+  // Fetch real search results using DuckDuckGo (free, no-key, includes URLs)
+  useEffect(() => {
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    const fetchResults = async () => {
+      try {
+        // DuckDuckGo API for "Instant Answers" and related topics
+        const response = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(searchQuery)}&format=json&no_html=1&skip_disambig=1`);
+        const data = await response.json();
+        
+        let results = [];
+        
+        // 1. Check for "Abstract" (The main instant answer)
+        if (data.AbstractText && data.AbstractURL) {
+          results.push({
+            title: data.AbstractSource || "Instant Answer",
+            description: data.AbstractText,
+            url: data.AbstractURL,
+            isInstant: true
+          });
+        }
+
+        // 2. Check "RelatedTopics"
+        if (data.RelatedTopics && data.RelatedTopics.length > 0) {
+          data.RelatedTopics.forEach(topic => {
+            if (results.length < 5 && topic.Text && topic.FirstURL) {
+              // DuckDuckGo related topics sometimes have an icon
+              results.push({
+                title: topic.Text.split(' - ')[0] || topic.Text,
+                description: topic.Text,
+                url: topic.FirstURL,
+                icon: topic.Icon?.URL
+              });
+            }
+          });
+        }
+
+        // 3. Fallback to Google Suggestions if no real results found
+        if (results.length === 0) {
+          const suggestRes = await fetch(`https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(searchQuery)}`);
+          const suggestData = await suggestRes.json();
+          if (suggestData && suggestData[1]) {
+            results = suggestData[1].slice(0, 5).map(s => ({
+              title: s,
+              description: `Search Google for "${s}"`,
+              url: `https://www.google.com/search?q=${encodeURIComponent(s)}`,
+              isSuggestion: true
+            }));
+          }
+        }
+
+        setSearchResults(results.slice(0, 5));
+      } catch (err) {
+        console.error("Search fetch error:", err);
+      }
+    };
+
+    const timer = setTimeout(fetchResults, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (mode !== 'large' || view !== 'search_urls') {
@@ -168,10 +450,12 @@ export default function Island() {
   };
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [timerIntervalRef] = useState(useRef(null));
+  const timerIntervalRef = useRef(null);
+  const [timerTotalSeconds, setTimerTotalSeconds] = useState(0);
   const [watchMode, setWatchMode] = useState('timer'); // timer | stopwatch
   const [stopwatchSeconds, setStopwatchSeconds] = useState(0);
   const [isStopwatchRunning, setIsStopwatchRunning] = useState(false);
+  const stopwatchIntervalRef = useRef(null);
   const [showAddUrlModal, setShowAddUrlModal] = useState(false);
   const [newUrlData, setNewUrlData] = useState({ name: '', url: '' });
 
@@ -386,6 +670,10 @@ export default function Island() {
     };
   };
 
+  const [isRingerHovered, setIsRingerHovered] = useState(false);
+
+  const [isWatchHovered, setIsWatchHovered] = useState(false);
+
   const startRinging = async ({ isoDate, ev }) => {
     if (!ev?.id) return;
     if (rungEventIdsRef.current.has(ev.id)) return;
@@ -395,10 +683,10 @@ export default function Island() {
     setRingingEvent({ id: ev.id, text: ev.text, time: ev.time || '', remainingMs: 10000, isoDate });
     setLastInteraction(Date.now());
 
-    if (mode === 'still') {
+    if (mode !== 'large') {
       setMode('quick');
-      if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false, false);
     }
+    if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false, false);
 
     // Audio for events removed per user request
     // const stopBeep = playTimerBeepFor10s();
@@ -417,8 +705,9 @@ export default function Island() {
     ringTimeoutRef.current = setTimeout(async () => {
       await stopRingingNow({ isoDate, eventId: ev.id });
 
-      if (!isMouseOver.current && ringingPrevModeRef.current === 'still') {
+      if (!isMouseOver.current) {
         setMode('still');
+        setView('home');
         if (window.electronAPI && !isMouseDown.current) {
           window.electronAPI.setIgnoreMouseEvents(true, true);
         }
@@ -567,24 +856,86 @@ export default function Island() {
       setView('home');
     }
   }, [mode, view]);
+  useEffect(() => {
+    if (isTimerRunning) {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = setInterval(() => {
+        setTimerSeconds(prev => {
+          if (prev <= 1) {
+            setIsTimerRunning(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    }
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, [isTimerRunning]);
+
+  useEffect(() => {
+    if (isStopwatchRunning) {
+      if (stopwatchIntervalRef.current) clearInterval(stopwatchIntervalRef.current);
+      stopwatchIntervalRef.current = setInterval(() => {
+        setStopwatchSeconds(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (stopwatchIntervalRef.current) clearInterval(stopwatchIntervalRef.current);
+    }
+    return () => {
+      if (stopwatchIntervalRef.current) clearInterval(stopwatchIntervalRef.current);
+    };
+  }, [isStopwatchRunning]);
+
+  useEffect(() => {
+    if (isTimerRunning && isStopwatchRunning) {
+      setIsStopwatchRunning(false);
+    }
+  }, [isTimerRunning]);
+
+  useEffect(() => {
+    if (!isTimerRunning && !isStopwatchRunning && timerSeconds === 0 && stopwatchSeconds === 0) {
+      setIsWatchHovered(false);
+    }
+  }, [isTimerRunning, isStopwatchRunning, timerSeconds, stopwatchSeconds]);
+
+  useEffect(() => {
+    if (mode === 'large') {
+      setIsWatchHovered(false);
+    }
+  }, [mode]);
+
   // Dynamic Width/Height based on mode and view - INCREASED FOR AI/DROPBOX
   const { width, height } = (() => {
+    if (showInIslandSettings && mode === 'large') {
+      return { width: 450, height: 400 };
+    }
     if (mode === "large") {
       switch (view) {
         case 'clipboard': return { width: 380, height: 290 };
         case 'ai':
         case 'dropbox': return { width: 420, height: 380 };
         case 'todo': return { width: 420, height: 320 };
-        case 'todo_timer': return { width: 280, height: 220 };
+        case 'todo_timer': return { width: 320, height: 260 };
         case 'todo_calendar': return { width: 360, height: 320 };
         case 'todo_calendar_events': return { width: 430, height: 340 };
         case 'weather': return { width: 350, height: 220 };
         case 'weather_details': return { width: 350, height: 200 };
         case 'search_urls': return { width: 400, height: 210 };
-        default: return { width: 400, height: 180 };
+        case 'search': return { width: 420, height: searchResults.length > 0 ? (searchResults.length * 65 + 100) : 180 };
+        case 'settings': return { width: 420, height: 380 };
+        default: return { width: 400, height: 200 };
       }
     }
-    if (mode === "quick" || isPlaying) return { width: 300, height: 43 };
+    if ((isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) && mode !== 'large') {
+      return isWatchHovered ? { width: 370, height: 43 } : { width: 230, height: 43 };
+    }
+    if (mode === "quick" || isPlaying) {
+      return { width: 300, height: 43 };
+    }
     return { width: 175, height: 43 };
   })();
 
@@ -605,10 +956,15 @@ export default function Island() {
       if (autoRevertTime <= 0) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
+        // Always close in-island settings on blur
+        setShowInIslandSettings(false);
+        
         if (view !== 'home' && view !== 'dropbox') {
           setMode('still');
           setView('home');
           setBrowserSearch('');
+          setSearchQuery('');
+          setSearchResults([]);
         }
       }, autoRevertTime);
     };
@@ -713,6 +1069,11 @@ export default function Island() {
       setAiModel(localStorage.getItem("ai-model") || "openai/gpt-3.5-turbo");
       setCustomModel(localStorage.getItem("custom-model") || "");
       setScrollAction(localStorage.getItem("scroll-action") || "volume");
+      setClockStyle(localStorage.getItem("clock-style") || "digital");
+          setAnalogStyle(localStorage.getItem("analog-style") || "simple");
+          setClockFont(localStorage.getItem("clock-font") || "OpenRunde");
+      setShowWatchInIdle(localStorage.getItem("show-watch-idle") !== "false");
+      setShowTimerBorder(localStorage.getItem("show-timer-border") !== "false");
     };
 
     syncSettings();
@@ -1101,6 +1462,18 @@ const handleDropToMove = async (e) => {
 
   // Timer logic
   useEffect(() => {
+    if (isTimerRunning && isStopwatchRunning) {
+      setIsStopwatchRunning(false);
+    }
+  }, [isTimerRunning]);
+
+  useEffect(() => {
+    if (isStopwatchRunning && isTimerRunning) {
+      setIsTimerRunning(false);
+    }
+  }, [isStopwatchRunning]);
+
+  useEffect(() => {
     let interval;
     if (isTimerRunning && timerSeconds > 0) {
       interval = setInterval(() => {
@@ -1356,51 +1729,53 @@ const handleDropToMove = async (e) => {
 
       setPrevView(view);
 
-    // Navigation Logic: Weather <-> Search <-> Home <-> Music <-> AI <-> Todo
-    if (view === 'home') {
-      if (e.key === 'ArrowLeft') setView('search');
-      if (e.key === 'ArrowRight') setView('music');
-      if (e.key === 'ArrowDown') setView('dropbox');
-      if (e.key === 'ArrowUp') setView('clipboard');
-    } else if (view === 'music') {
-      if (e.key === 'ArrowLeft') setView('home');
-      if (e.key === 'ArrowRight') setView('ai');
-    } else if (view === 'search') {
-      if (e.key === 'ArrowLeft') setView('weather');
-      if (e.key === 'ArrowRight') setView('home');
-      if (e.key === 'ArrowDown') setView('search_urls');
-    } else if (view === 'search_urls') {
-      if (e.key === 'ArrowUp') setView('search');
-    } else if (view === 'weather') {
-      if (e.key === 'ArrowLeft') {
-        if (infiniteScroll) setView('todo');
+    // Navigation Logic: Use layoutOrder.pages for horizontal navigation
+    const currentPageIndex = layoutOrder.pages.indexOf(view);
+    const getNextPage = (direction) => {
+      const len = layoutOrder.pages.length;
+      let nextIdx = currentPageIndex + direction;
+      if (infiniteScroll) {
+        nextIdx = (nextIdx + len) % len;
+      } else {
+        nextIdx = Math.max(0, Math.min(len - 1, nextIdx));
       }
-      if (e.key === 'ArrowRight') setView('search');
-      if (e.key === 'ArrowDown') setView('weather_details');
-    } else if (view === 'weather_details') {
-      if (e.key === 'ArrowUp') setView('weather');
-    } else if (view === 'ai') {
-      if (e.key === 'ArrowLeft') setView('music');
-      if (e.key === 'ArrowRight') setView('todo');
-    } else if (view === 'todo') {
-      if (e.key === 'ArrowLeft') setView('ai');
-      if (e.key === 'ArrowRight') {
-        if (infiniteScroll) setView('weather');
+      return layoutOrder.pages[nextIdx];
+    };
+
+    if (currentPageIndex !== -1) {
+      if (e.key === 'ArrowLeft') setView(getNextPage(-1));
+      if (e.key === 'ArrowRight') setView(getNextPage(1));
+      
+      if (view === 'home') {
+        if (e.key === 'ArrowUp') setView(layoutOrder.home[0]);
+        if (e.key === 'ArrowDown') setView(layoutOrder.home[1]);
+      } else if (view === 'todo') {
+        if (e.key === 'ArrowUp') setView(layoutOrder.todo[0] === 'calendar' ? 'todo_calendar' : 'todo_timer');
+        if (e.key === 'ArrowDown') setView(layoutOrder.todo[1] === 'calendar' ? 'todo_calendar' : 'todo_timer');
+      } else if (view === 'search') {
+        if (e.key === 'ArrowDown') setView('search_urls');
+      } else if (view === 'weather') {
+        if (e.key === 'ArrowDown') setView('weather_details');
       }
-      if (e.key === 'ArrowDown') setView('todo_timer');
-      if (e.key === 'ArrowUp') setView('todo_calendar');
-    } else if (view === 'todo_calendar') {
-      if (e.key === 'ArrowDown') setView('todo');
-      if (e.key === 'Escape') setView('todo');
-    } else if (view === 'todo_calendar_events') {
-      if (e.key === 'ArrowDown') setView('todo_calendar');
-      if (e.key === 'Escape') setView('todo_calendar');
-    } else if (view === 'todo_timer') {
-      if (e.key === 'ArrowUp') setView('todo');
-    } else if (view === 'dropbox') {
-      if (e.key === 'ArrowUp') setView('home');
-    } else if (view === 'clipboard') {
-      if (e.key === 'ArrowDown') setView('home');
+    } else {
+      // Handle sub-views
+      if (view === 'search_urls') {
+        if (e.key === 'ArrowUp') setView('search');
+      } else if (view === 'weather_details') {
+        if (e.key === 'ArrowUp') setView('weather');
+      } else if (view === 'todo_calendar') {
+        if (e.key === 'ArrowDown') setView('todo');
+        if (e.key === 'Escape') setView('todo');
+      } else if (view === 'todo_calendar_events') {
+        if (e.key === 'ArrowDown') setView('todo_calendar');
+        if (e.key === 'Escape') setView('todo_calendar');
+      } else if (view === 'todo_timer') {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('todo');
+      } else if (view === 'dropbox') {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('home');
+      } else if (view === 'clipboard') {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('home');
+      }
     }
 
       if (e.key === 'Escape') setView('home');
@@ -1412,10 +1787,29 @@ const handleDropToMove = async (e) => {
     };
   }, [mode, view]);
 
+  // Transition Logic based on dynamic layoutOrder
+  const getHorizontalTransform = (targetView) => {
+    if (view === targetView) return 'translate(0, 0)';
+    
+    const pages = layoutOrder.pages;
+    const currentIdx = pages.indexOf(view);
+    const targetIdx = pages.indexOf(targetView);
+
+    // If both are pages, calculate direction
+    if (currentIdx !== -1 && targetIdx !== -1) {
+      if (currentIdx < targetIdx) return 'translateX(100%)';
+      return 'translateX(-100%)';
+    }
+
+    // Default behavior for views not in pages (sub-views handled specifically below)
+    return 'translateX(100%)';
+  };
+
   return (
     <div
       id="Island"
       onDragEnter={() => {
+        if (showInIslandSettings) return;
         if (mode !== "large") setMode("large");
         if (view !== "dropbox") setView("dropbox");
         if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false, false);
@@ -1449,7 +1843,11 @@ const handleDropToMove = async (e) => {
           setMode("still");
         }
       }}
-      onClick={() => {
+      onClick={(e) => {
+        if (ringingEvent) {
+          e.stopPropagation();
+          return;
+        }
         setMode("large");
         if (window.electronAPI) {
           window.electronAPI.setIgnoreMouseEvents(false, false);
@@ -1481,7 +1879,7 @@ const handleDropToMove = async (e) => {
         borderRadius:
           mode === "large" && theme === "win95"
             ? 0
-            : mode === "large"
+            : (mode === "large" || mode === "quick")
               ? cornerRadius
               : theme === "win95"
                 ? 0
@@ -1495,118 +1893,279 @@ const handleDropToMove = async (e) => {
         zIndex: 9999
       }}
     >
-      {ringingEvent && (
-        <div style={{
-          position: 'absolute', inset: 0,
-          zIndex: 250,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          pointerEvents: 'auto'
-        }}
-        onMouseEnter={() => setShowControls(true)}
-        onMouseLeave={() => setShowControls(false)}
-        >
-          <div
-            onClick={() => {
-              setSelectedCalendarDate(ringingEvent.isoDate);
-              setMode('large');
-              setView('todo_calendar_events');
-              setLastInteraction(Date.now());
-              loadCalendarEvents();
-            }}
-            style={{
-            width: '92%',
-            height: 34,
-            borderRadius: 999,
-            background: 'rgba(255,255,255,0.08)',
-            border: '1px solid rgba(255,255,255,0.10)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '0 14px',
-            backdropFilter: 'blur(10px)',
-            cursor: 'pointer'
+      {/* Watch Live Bar (Timer/Stopwatch Running or Paused with value) */}
+      {(isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) && mode !== 'large' && !ringingEvent && (
+        <div 
+          onMouseEnter={() => setIsWatchHovered(true)}
+          onMouseLeave={() => setIsWatchHovered(false)}
+          onClick={(e) => {
+            if (!isWatchHovered) {
+              setMode("large");
+              if (window.electronAPI) {
+                window.electronAPI.setIgnoreMouseEvents(false, false);
+              }
+            } else {
+              // In hover mode, clicking the background (outside the pill) should expand
+              // but clicking the pill itself (handled by its own z-index/stopProp) shouldn't.
+              // Since the background div is the click target here:
+              setMode("large");
+              if (window.electronAPI) {
+                window.electronAPI.setIgnoreMouseEvents(false, false);
+              }
+            }
           }}
-          >
-            <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.85 }}>
-              {ringingEvent.time || '--:--'}
-            </div>
-            <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-              {ringingEvent.text}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 200,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: isWatchHovered ? 'transparent' : (localStorage.getItem("bg-color") || '#000'),
+            pointerEvents: 'auto',
+            borderRadius: 'inherit',
+            transition: 'background 0.3s ease, all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+        >
+          {/* Animated Border Progress (Outer Bar - Idle) - Only for Timer */}
+          {(isTimerRunning || timerSeconds > 0) && !isStopwatchRunning && !ringingEvent && (
+            <svg 
+              viewBox={`0 0 ${width} ${height}`}
+              style={{ 
+                position: 'absolute', 
+                inset: 0, 
+                width: '100%', 
+                height: '100%', 
+                pointerEvents: 'none',
+                opacity: !isWatchHovered ? 1 : 0,
+                transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                zIndex: 1
+              }}
+            >
+              <path
+                  d={`M ${width/2} 0 L ${width - height/2} 0 A ${height/2} ${height/2} 0 0 1 ${width} ${height/2} A ${height/2} ${height/2} 0 0 1 ${width - height/2} ${height} L ${width/2} ${height}`}
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  pathLength="50"
+                  strokeDasharray="50"
+                  strokeDashoffset={50 - (timerSeconds / (timerTotalSeconds || 1) * 50)}
+                  style={{ transition: 'stroke-dashoffset 1s linear' }}
+                />
+                <path
+                  d={`M ${width/2} 0 L ${height/2} 0 A ${height/2} ${height/2} 0 0 0 0 ${height/2} A ${height/2} ${height/2} 0 0 0 ${height/2} ${height} L ${width/2} ${height}`}
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  pathLength="50"
+                  strokeDasharray="50"
+                  strokeDashoffset={50 - (timerSeconds / (timerTotalSeconds || 1) * 50)}
+                  style={{ transition: 'stroke-dashoffset 1s linear' }}
+                />
+            </svg>
+          )}
+
+          {/* Background Content when hovered */}
+          <div style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '0 15px', pointerEvents: 'none', 
+            opacity: isWatchHovered ? 1 : 0,
+            transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+            willChange: 'opacity'
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: textColor }}>{time}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Cloud size={16} color={textColor} />
+              <div style={{ fontSize: 16, fontWeight: 700, color: textColor }}>{weather ? `${weather}°` : "--°"}</div>
             </div>
           </div>
-          {showControls && (
+
+          {/* Main Watch Pill Content */}
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+            width: '200px',
+            height: '32px',
+            background: (localStorage.getItem("bg-color") || '#000'),
+            borderRadius: '20px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '0 12px',
+            transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s ease',
+            boxShadow: isWatchHovered ? '0 4px 12px rgba(0,0,0,0.3)' : 'none',
+            border: isWatchHovered ? '1px solid rgba(255,255,255,0.1)' : 'none',
+            position: 'relative',
+            zIndex: 2
+          }}>
+            {/* Animated Border Progress (Inner Pill - Hover) - Only for Timer */}
+            {(isTimerRunning || timerSeconds > 0) && !isStopwatchRunning && !ringingEvent && (
+              <svg 
+                viewBox="0 0 200 32"
+                style={{ 
+                  position: 'absolute', 
+                  inset: 0, 
+                  width: '100%', 
+                  height: '100%', 
+                  pointerEvents: 'none',
+                  opacity: isWatchHovered ? 1 : 0,
+                  transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                  zIndex: 1
+                }}
+              >
+                <path
+                    d="M 100 0 L 184 0 A 16 16 0 0 1 200 16 A 16 16 0 0 1 184 32 L 100 32"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    pathLength="50"
+                    strokeDasharray="50"
+                    strokeDashoffset={50 - (timerSeconds / (timerTotalSeconds || 1) * 50)}
+                    style={{ transition: 'stroke-dashoffset 1s linear' }}
+                  />
+                  <path
+                    d="M 100 0 L 16 0 A 16 16 0 0 0 0 16 A 16 16 0 0 0 16 32 L 100 32"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    pathLength="50"
+                    strokeDasharray="50"
+                    strokeDashoffset={50 - (timerSeconds / (timerTotalSeconds || 1) * 50)}
+                    style={{ transition: 'stroke-dashoffset 1s linear' }}
+                  />
+              </svg>
+            )}
+            {/* Left: Time */}
             <div style={{ 
-              position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', 
-              display: 'flex', gap: 4, zIndex: 10,
-              padding: '3px', borderRadius: 20,
-              background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255,255,255,0.1)'
+              fontSize: 13, 
+              fontWeight: 700, 
+              color: textColor,
+              fontVariantNumeric: 'tabular-nums',
+              letterSpacing: -0.5
             }}>
-              <div 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setRingingEvent(prev => {
-                    const newMs = prev.remainingMs + 60000;
-                    if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
-                    ringTimeoutRef.current = setTimeout(async () => {
-                      await stopRingingNow({ isoDate: prev.isoDate, eventId: prev.id });
-                    }, newMs);
-                    return { ...prev, remainingMs: newMs };
-                  });
-                }} 
-                style={{ 
-                  width: 26, height: 18, borderRadius: 10, background: 'rgba(255,255,255,0.08)', 
-                  color: 'white', fontSize: 8, fontWeight: 900, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-              >
-                +1M
-              </div>
-              <div 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setRingingEvent(prev => {
-                    const newMs = prev.remainingMs + 300000;
-                    if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
-                    ringTimeoutRef.current = setTimeout(async () => {
-                      await stopRingingNow({ isoDate: prev.isoDate, eventId: prev.id });
-                    }, newMs);
-                    return { ...prev, remainingMs: newMs };
-                  });
-                }} 
-                style={{ 
-                  width: 26, height: 18, borderRadius: 10, background: 'rgba(255,255,255,0.08)', 
-                  color: 'white', fontSize: 8, fontWeight: 900, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-              >
-                +5M
-              </div>
-              <div 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  stopRingingNow({ isoDate: ringingEvent.isoDate, eventId: ringingEvent.id });
-                }} 
-                style={{ 
-                  width: 18, height: 18, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.9)', 
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 1)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.9)'}
-              >
-                <X size={10} color="white" strokeWidth={3} />
-              </div>
+              {(isTimerRunning || (timerSeconds > 0 && !isStopwatchRunning)) ? formatTimer(timerSeconds) : formatTimer(stopwatchSeconds)}
             </div>
-          )}
+
+            {/* Right: Icon or Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {isWatchHovered ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, animation: 'fadeIn 0.2s ease-out' }}>
+                  <div 
+                    onClick={() => {
+                      if (isTimerRunning || (timerSeconds > 0 && !isStopwatchRunning)) {
+                        setIsTimerRunning(!isTimerRunning);
+                      } else {
+                        setIsStopwatchRunning(!isStopwatchRunning);
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {(isTimerRunning || isStopwatchRunning) 
+                      ? <Pause size={14} color={textColor} /> 
+                      : <Play size={14} color={textColor} />}
+                  </div>
+                  <div 
+                    onClick={() => {
+                      setIsTimerRunning(false);
+                      setIsStopwatchRunning(false);
+                      setTimerSeconds(0);
+                      setStopwatchSeconds(0);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <X size={14} color="#ef4444" />
+                  </div>
+                </div>
+              ) : (
+                <div style={{ animation: 'fadeIn 0.2s ease-out' }}>
+                  {isStopwatchRunning && <TimerIcon size={16} color={textColor} />}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {ringingEvent && (
+        <div style={{
+          position: 'absolute', 
+          inset: mode === 'large' ? '12px auto auto 15px' : 0,
+          width: mode === 'large' ? 'auto' : '100%',
+          height: mode === 'large' ? '32px' : '100%',
+          maxWidth: mode === 'large' ? '220px' : 'none',
+          zIndex: 250,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'auto',
+          background: mode === 'large' ? 'transparent' : (view === 'weather' || view === 'weather_details') 
+            ? (getWeatherStyles().bgColor.includes('gradient') ? getWeatherStyles().bgColor : localStorage.getItem("bg-color") || '#000') 
+            : (localStorage.getItem("bg-color") || '#000'),
+          borderRadius: mode === 'large' ? '20px' : 'inherit',
+        }}
+        >
+          <div style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: 'inherit',
+            background: `linear-gradient(90deg, transparent, ${textColor}88, ${textColor}, ${textColor}88, transparent)`,
+            backgroundSize: '200% 100%',
+            animation: 'gradientMove 2.5s ease-in-out infinite',
+            padding: mode === 'large' ? '1.5px' : '2px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <style>{`
+              @keyframes gradientMove {
+                0% { background-position: -100% 50%; }
+                100% { background-position: 100% 50%; }
+              }
+            `}</style>
+            <div
+              onMouseEnter={() => setIsRingerHovered(true)}
+              onMouseLeave={() => setIsRingerHovered(false)}
+              onClick={() => {
+                stopRingingNow({ isoDate: ringingEvent.isoDate, eventId: ringingEvent.id, navigate: false });
+              }}
+              style={{
+                width: '100%',
+                height: '100%',
+                borderRadius: 'inherit',
+                background: localStorage.getItem("bg-color") || '#000',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: mode === 'large' ? '0 12px' : '0 15px',
+                cursor: 'pointer',
+                gap: 8
+              }}
+            >
+              {/* Left: Current Time (Clock) or Time icon */}
+              <div style={{ fontSize: mode === 'large' ? 12 : 16, fontWeight: 700, color: textColor, whiteSpace: 'nowrap' }}>
+                {mode === 'large' ? (ringingEvent.time || '--:--') : time}
+              </div>
+
+              {/* Center: Event Text */}
+              <div style={{ 
+                fontSize: mode === 'large' ? 11 : 13, 
+                fontWeight: 600, 
+                opacity: 0.9, 
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis', 
+                whiteSpace: 'nowrap', 
+                flex: 1,
+                color: textColor,
+                textAlign: 'center'
+              }}>
+                {ringingEvent.text}
+              </div>
+
+              {/* Right: Spacer to maintain centering */}
+              {mode !== 'large' && (
+                <div style={{ width: 40 }} />
+              )}
+            </div>
+          </div>
         </div>
       )}
       {/*Quickview*/}
-      {(mode === "quick" || (mode === "still" && isPlaying)) ? (
+      {(mode === "quick" || (mode === "still" && isPlaying)) && !ringingEvent && !(isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) ? (
         <>
           {isPlaying && !alert && !chargingAlert && !bluetoothAlert ? (
             <div style={{
@@ -1683,7 +2242,12 @@ const handleDropToMove = async (e) => {
                     : `${localStorage.getItem("text-color")} `
                 }}
               >
-                {alert === true ? `${percent}% ` : chargingAlert === true ? `${percent}% ` : standbyBorderEnabled ? "" : bluetoothAlert ? "Connected" : weather ? `${weather} º` : ""}
+                {alert === true ? `${percent}% ` : chargingAlert === true ? `${percent}% ` : standbyBorderEnabled ? "" : bluetoothAlert ? "Connected" : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Cloud size={16} color={textColor} />
+                    <span>{weather ? `${weather} º` : ""}</span>
+                  </div>
+                )}
               </h1>
             </>
           )}
@@ -1710,20 +2274,23 @@ const handleDropToMove = async (e) => {
       )}
 
       {/* Navigation Areas - Destination Icons Only */}
-      {mode === 'large' && showArrows && (
+      {mode === 'large' && showArrows && !showInIslandSettings && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 100, pointerEvents: 'none' }}>
           {/* Left Side */}
-          {((view === 'home') || (view === 'music') || (view === 'ai') || (view === 'todo') || (view === 'search') || (view === 'weather' && infiniteScroll)) && (
+          {layoutOrder.pages.includes(view) && (
             <div
               className="nav-dest-zone left"
               onClick={() => {
+                const len = layoutOrder.pages.length;
+                const currentIdx = layoutOrder.pages.indexOf(view);
+                let nextIdx = currentIdx - 1;
+                if (infiniteScroll) {
+                  nextIdx = (nextIdx + len) % len;
+                } else {
+                  if (nextIdx < 0) return;
+                }
                 setPrevView(view);
-                if (view === 'home') setView('search');
-                else if (view === 'music') setView('home');
-                else if (view === 'ai') setView('music');
-                else if (view === 'todo') setView('ai');
-                else if (view === 'search') setView('weather');
-                else if (view === 'weather' && infiniteScroll) setView('todo');
+                setView(layoutOrder.pages[nextIdx]);
               }}
               onMouseEnter={() => setHoveredNav('left')}
               onMouseLeave={() => setHoveredNav(null)}
@@ -1733,26 +2300,42 @@ const handleDropToMove = async (e) => {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 opacity: hoveredNav === 'left' ? 0.6 : 0, transition: 'opacity 0.2s ease'
               }}>
-              {view === 'home' && <Search size={14} color={textColor} />}
-              {view === 'music' && <Home size={14} color={textColor} />}
-              {view === 'ai' && <Music size={14} color={textColor} />}
-              {view === 'todo' && <MessageSquare size={14} color={textColor} />}
-              {view === 'search' && <Cloud size={14} color={textColor} />}
-              {view === 'weather' && infiniteScroll && <List size={14} color={textColor} />}
+              {(() => {
+                const len = layoutOrder.pages.length;
+                const currentIdx = layoutOrder.pages.indexOf(view);
+                let nextIdx = currentIdx - 1;
+                if (infiniteScroll) nextIdx = (nextIdx + len) % len;
+                if (nextIdx >= 0 && nextIdx < len) {
+                  const nextView = layoutOrder.pages[nextIdx];
+                  switch (nextView) {
+                    case 'home': return <Home size={14} color={textColor} />;
+                    case 'search': return <Search size={14} color={textColor} />;
+                    case 'weather': return <Cloud size={14} color={textColor} />;
+                    case 'music': return <Music size={14} color={textColor} />;
+                    case 'ai': return <MessageSquare size={14} color={textColor} />;
+                    case 'todo': return <List size={14} color={textColor} />;
+                    default: return <ChevronLeft size={14} color={textColor} />;
+                  }
+                }
+                return null;
+              })()}
             </div>
           )}
           {/* Right Side */}
-          {((view === 'home') || (view === 'search') || (view === 'music') || (view === 'ai') || (view === 'weather') || (view === 'todo' && infiniteScroll)) && (
+          {layoutOrder.pages.includes(view) && (
             <div
               className="nav-dest-zone right"
               onClick={() => {
+                const len = layoutOrder.pages.length;
+                const currentIdx = layoutOrder.pages.indexOf(view);
+                let nextIdx = currentIdx + 1;
+                if (infiniteScroll) {
+                  nextIdx = nextIdx % len;
+                } else {
+                  if (nextIdx >= len) return;
+                }
                 setPrevView(view);
-                if (view === 'home') setView('music');
-                else if (view === 'search') setView('home');
-                else if (view === 'music') setView('ai');
-                else if (view === 'ai') setView('todo');
-                else if (view === 'weather') setView('search');
-                else if (view === 'todo' && infiniteScroll) setView('weather');
+                setView(layoutOrder.pages[nextIdx]);
               }}
               onMouseEnter={() => setHoveredNav('right')}
               onMouseLeave={() => setHoveredNav(null)}
@@ -1762,42 +2345,55 @@ const handleDropToMove = async (e) => {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 opacity: hoveredNav === 'right' ? 0.6 : 0, transition: 'opacity 0.2s ease'
               }}>
-              {view === 'home' && <Music size={14} color={textColor} />}
-              {view === 'search' && <Home size={14} color={textColor} />}
-              {view === 'music' && <MessageSquare size={14} color={textColor} />}
-              {view === 'ai' && <List size={14} color={textColor} />}
-              {view === 'weather' && <Search size={14} color={textColor} />}
-              {view === 'todo' && infiniteScroll && <Cloud size={14} color={textColor} />}
+              {(() => {
+                const len = layoutOrder.pages.length;
+                const currentIdx = layoutOrder.pages.indexOf(view);
+                let nextIdx = currentIdx + 1;
+                if (infiniteScroll) nextIdx = nextIdx % len;
+                if (nextIdx >= 0 && nextIdx < len) {
+                  const nextView = layoutOrder.pages[nextIdx];
+                  switch (nextView) {
+                    case 'home': return <Home size={14} color={textColor} />;
+                    case 'search': return <Search size={14} color={textColor} />;
+                    case 'weather': return <Cloud size={14} color={textColor} />;
+                    case 'music': return <Music size={14} color={textColor} />;
+                    case 'ai': return <MessageSquare size={14} color={textColor} />;
+                    case 'todo': return <List size={14} color={textColor} />;
+                    default: return <ChevronRight size={14} color={textColor} />;
+                  }
+                }
+                return null;
+              })()}
             </div>
           )}
           {/* Bottom Area (Home -> Dropbox, or Expand for Weather/Todo/Search) */}
-          {((view === 'home') || (view === 'weather') || (view === 'todo') || (view === 'search') || (view === 'weather_details') || (view === 'todo_timer') || (view === 'search_urls')) && (
+          {((view === 'home') || (view === 'weather') || (view === 'todo') || (view === 'search') || (view === 'weather_details') || (view === 'todo_timer') || (view === 'search_urls') || (view === 'todo_calendar')) && (
             <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 20 }}>
               <div
                 className="nav-dest-zone bottom-action"
                 onClick={() => {
                   if (view === 'home') {
-                    setPrevView(view);
-                    setView('dropbox');
-                  } else if (view === 'weather') {
-                    setPrevView(view);
-                    setView('weather_details');
-                  } else if (view === 'todo') {
-                    setPrevView(view);
-                    setView('todo_timer');
-                  } else if (view === 'search') {
-                    setPrevView(view);
-                    setView('search_urls');
-                  } else if (view === 'weather_details') {
-                    setPrevView(view);
-                    setView('weather');
-                  } else if (view === 'todo_timer') {
-                    setPrevView(view);
-                    setView('todo');
-                  } else if (view === 'search_urls') {
-                    setPrevView(view);
-                    setView('search');
-                  }
+                  setPrevView(view);
+                  setView(layoutOrder.home[1]);
+                } else if (view === 'weather') {
+                  setPrevView(view);
+                  setView(layoutOrder.weather[1] === 'details' ? 'weather_details' : 'weather');
+                } else if (view === 'todo') {
+                  setPrevView(view);
+                  setView(layoutOrder.todo[1] === 'calendar' ? 'todo_calendar' : 'todo_timer');
+                } else if (view === 'search') {
+                  setPrevView(view);
+                  setView(layoutOrder.search[1] === 'urls' ? 'search_urls' : 'search');
+                } else if (view === 'weather_details') {
+                  setPrevView(view);
+                  setView('weather');
+                } else if (view === 'todo_timer' || view === 'todo_calendar') {
+                  setPrevView(view);
+                  setView('todo');
+                } else if (view === 'search_urls') {
+                  setPrevView(view);
+                  setView('search');
+                }
                 }}
                 onMouseEnter={() => setHoveredNav('bottom-action')}
                 onMouseLeave={() => setHoveredNav(null)}
@@ -1806,21 +2402,24 @@ const handleDropToMove = async (e) => {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   opacity: hoveredNav === 'bottom-action' ? 0.6 : 0, transition: 'opacity 0.2s ease'
                 }}>
-                {(view === 'home') && <Box size={14} color={textColor} />}
+                {(view === 'home') && (layoutOrder.home[1] === 'dropbox' ? <Box size={14} color={textColor} /> : <ClipboardIcon size={14} color={textColor} />)}
                 {(view === 'weather' || view === 'todo' || view === 'search') && <ChevronDown size={14} color={textColor} />}
-                {(view === 'weather_details' || view === 'todo_timer' || view === 'search_urls') && <ChevronUp size={14} color={textColor} />}
+                {(view === 'weather_details' || view === 'todo_timer' || view === 'search_urls' || view === 'todo_calendar') && <ChevronUp size={14} color={textColor} />}
               </div>
             </div>
           )}
           {/* Top Area (Home -> Clipboard, or Return from Sub-views) */}
-          {((view === 'home') || (view === 'weather_details') || (view === 'todo_timer') || (view === 'search_urls') || (view === 'dropbox')) && (
+          {((view === 'home') || (view === 'todo') || (view === 'weather') || (view === 'search') || (view === 'weather_details') || (view === 'todo_timer') || (view === 'search_urls') || (view === 'dropbox') || (view === 'todo_calendar')) && (
             <div
-              className={`nav-dest-zone ${view === 'home' ? 'top-clipboard' : 'top-return'}`}
+              className={`nav-dest-zone ${view === 'home' || view === 'todo' || view === 'weather' || view === 'search' ? 'top-clipboard' : 'top-return'}`}
               onClick={() => {
                 setPrevView(view);
-                if (view === 'home') setView('clipboard');
+                if (view === 'home') setView(layoutOrder.home[0]);
+                else if (view === 'todo') setView(layoutOrder.todo[0] === 'calendar' ? 'todo_calendar' : 'todo_timer');
+                else if (view === 'weather') setView(layoutOrder.weather[0] === 'details' ? 'weather_details' : 'weather');
+                else if (view === 'search') setView(layoutOrder.search[0] === 'urls' ? 'search_urls' : 'search');
                 else if (view === 'weather_details') setView('weather');
-                else if (view === 'todo_timer') setView('todo');
+                else if (view === 'todo_timer' || view === 'todo_calendar') setView('todo');
                 else if (view === 'search_urls') setView('search');
                 else if (view === 'dropbox') setView('home');
               }}
@@ -1830,10 +2429,14 @@ const handleDropToMove = async (e) => {
                 position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
                 width: '60px', height: '30px', pointerEvents: 'auto', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                opacity: hoveredNav === 'top-area' ? 0.8 : (view === 'home' ? 0 : 0.3),
+                opacity: hoveredNav === 'top-area' ? 0.8 : ((view === 'home' || view === 'todo') ? 0 : 0.3),
                 transition: 'opacity 0.2s ease'
               }}>
-              {view === 'home' ? <ClipboardIcon size={14} color={textColor} /> : <ChevronUp size={16} color={textColor} />}
+              {view === 'home' ? (layoutOrder.home[0] === 'dropbox' ? <Box size={14} color={textColor} /> : <ClipboardIcon size={14} color={textColor} />) : 
+               view === 'todo' ? (layoutOrder.todo[0] === 'calendar' ? <Calendar size={14} color={textColor} /> : <TimerIcon size={14} color={textColor} />) :
+               view === 'weather' ? (layoutOrder.weather[0] === 'details' ? <Cloud size={14} color={textColor} /> : <Cloud size={14} color={textColor} />) :
+               view === 'search' ? (layoutOrder.search[0] === 'urls' ? <Search size={14} color={textColor} /> : <Search size={14} color={textColor} />) :
+               <ChevronUp size={16} color={textColor} />}
             </div>
           )}
           {/* Return Areas (Bottom) */}
@@ -1859,7 +2462,7 @@ const handleDropToMove = async (e) => {
       )}
 
       {/* Persistent Clock and Battery Status (Top-Right on non-home views) */}
-      {view !== 'dropbox' && (
+      {view !== 'dropbox' && !showInIslandSettings && (
         <div style={{
           position: 'absolute', top: 15, right: 25, zIndex: 100,
           display: 'flex', alignItems: 'center', gap: 12,
@@ -1899,9 +2502,16 @@ const handleDropToMove = async (e) => {
             opacity: view !== 'home' ? 1 : 0,
             transform: view !== 'home' ? 'translateX(0)' : 'translateX(20px)',
             transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-            textAlign: 'right'
+            textAlign: 'right',
+            fontFamily: clockFont === 'w95' ? '"MS Sans Serif", "Microsoft Sans Serif", sans-serif' : 
+                       clockFont === 'OpenRunde' ? '"OpenRunde", sans-serif' : 
+                       clockFont
           }}>
-            <h1 style={{ fontSize: 12, margin: 0, lineHeight: 1, fontWeight: 600 }}>{time}</h1>
+            {clockStyle === 'analog' ? (
+               <AnalogClock size={20} color={textColor} style={analogStyle} />
+             ) : (
+              <h1 style={{ fontSize: 12, margin: 0, lineHeight: 1, fontWeight: 600 }}>{time}</h1>
+            )}
           </div>
         </div>
       )}
@@ -1913,34 +2523,1086 @@ const handleDropToMove = async (e) => {
         <div style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
           opacity: view === 'home' && mode === 'large' ? 1 : 0,
-          transform: view === 'home' && mode === 'large' ? 'translate(0, 0)' :
-            view === 'search' ? 'translateX(100%)' :
-              view === 'music' ? 'translateX(-100%)' :
-                view === 'dropbox' ? 'translateY(-100%)' :
-                  view === 'clipboard' ? 'translateY(100%)' :
-                    (prevView === 'search' && view === 'home') ? 'translateX(0)' :
-                    (prevView === 'music' && view === 'home') ? 'translateX(0)' :
-                      'translate(0,0)',
+          transform: view === layoutOrder.home[0] ? 'translateY(100%)' :
+            view === layoutOrder.home[1] ? 'translateY(-100%)' :
+            getHorizontalTransform('home'),
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           pointerEvents: view === 'home' && mode === 'large' ? 'auto' : 'none',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
         }}>
 
           <div
-            onClick={() => window.electronAPI?.openSettings?.()}
+            onClick={() => setShowInIslandSettings(true)}
             style={{
               position: 'absolute',
               right: 12,
               bottom: 10,
               cursor: 'pointer',
               opacity: 0.25,
-              transition: 'opacity 0.2s ease'
+              transition: 'opacity 0.2s ease',
+              zIndex: 101
             }}
             onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
             onMouseLeave={(e) => e.currentTarget.style.opacity = '0.25'}
           >
             <Settings size={12} color={textColor} />
           </div>
+
+          {showInIslandSettings && (
+            <div 
+              ref={settingsRef}
+              style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.9)',
+              zIndex: 200,
+              padding: '40px 20px 20px 20px',
+              display: 'flex',
+              flexDirection: 'column',
+              backdropFilter: 'blur(20px)',
+              animation: 'appear 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}>
+              <div style={{
+                position: 'absolute',
+                top: 15,
+                left: 20,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <Settings size={14} color={textColor} opacity={0.6} />
+                <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>SETTINGS</div>
+              </div>
+
+              <div
+                onClick={() => setShowInIslandSettings(false)}
+                style={{
+                  position: 'absolute',
+                  top: 15,
+                  right: 20,
+                  cursor: 'pointer',
+                  opacity: 0.5
+                }}
+              >
+                <X size={16} color={textColor} />
+              </div>
+
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 20,
+                paddingRight: 5
+              }}>
+                {/* Clock Customization Section */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Clock Customization</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {/* Clock Style */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Clock Style</span>
+                      <div style={{ display: 'flex', gap: 5, background: 'rgba(255,255,255,0.05)', padding: 3, borderRadius: 8 }}>
+                        {['digital', 'analog'].map(style => (
+                          <div
+                            key={style}
+                            onClick={() => {
+                              setClockStyle(style);
+                              localStorage.setItem("clock-style", style);
+                            }}
+                            style={{
+                              padding: '4px 10px',
+                              borderRadius: 6,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              background: clockStyle === style ? 'rgba(255,255,255,0.1)' : 'transparent',
+                              color: clockStyle === style ? '#fff' : 'rgba(255,255,255,0.4)',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            {style.toUpperCase()}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Clock Font */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Clock Font</span>
+                      <select
+                        value={clockFont}
+                        onChange={(e) => {
+                          setClockFont(e.target.value);
+                          localStorage.setItem("clock-font", e.target.value);
+                        }}
+                        style={{
+                          background: 'rgba(255,255,255,0.05)',
+                          border: 'none',
+                          color: 'white',
+                          padding: '4px 8px',
+                          borderRadius: 8,
+                          fontSize: 11,
+                          outline: 'none'
+                        }}
+                      >
+                        <option value="OpenRunde">OpenRunde</option>
+                        <option value="w95">Win95 (Original)</option>
+                        <option value="SF Pro Display">SF Pro</option>
+                        <option value="Segoe UI">Segoe UI</option>
+                        <option value="monospace">Monospace</option>
+                      </select>
+                    </div>
+
+                    {/* Analog Style */}
+                    {clockStyle === 'analog' && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>Analog Style</span>
+                        <select
+                          value={analogStyle}
+                          onChange={(e) => {
+                            setAnalogStyle(e.target.value);
+                            localStorage.setItem("analog-style", e.target.value);
+                          }}
+                          style={{
+                            background: 'rgba(255,255,255,0.05)',
+                            border: 'none',
+                            color: 'white',
+                            padding: '4px 8px',
+                            borderRadius: 8,
+                            fontSize: 11,
+                            outline: 'none'
+                          }}
+                        >
+                          <option value="simple">Simple</option>
+                          <option value="cyber">Cyber</option>
+                          <option value="minimalist">Minimalist</option>
+                          <option value="cool">Cool</option>
+                          <option value="retro">Retro</option>
+                          <option value="modern">Modern</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Layout Customization Section */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Layout & Reordering</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+                    
+                    {/* Page Reordering */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div 
+                        onClick={() => setExpandedSections(prev => ({ ...prev, pages: !prev.pages }))}
+                        style={{ 
+                          fontSize: 12, 
+                          fontWeight: 500, 
+                          opacity: 0.7, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 6, 
+                          cursor: 'pointer',
+                          userSelect: 'none'
+                        }}
+                      >
+                        {expandedSections.pages ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        Page Visibility & Order
+                      </div>
+                      {expandedSections.pages && (
+                        <div style={{ display: 'flex', gap: 15, width: '100%' }}>
+                          {/* Active Pages */}
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ fontSize: 10, opacity: 0.5, fontWeight: 600 }}>ACTIVE</div>
+                            <div 
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={(e) => {
+                                const pageName = e.dataTransfer.getData("pageName");
+                                const fromType = e.dataTransfer.getData("fromType");
+                                if (fromType === "hidden") {
+                                  const newHidden = layoutOrder.hiddenPages.filter(p => p !== pageName);
+                                  const newPages = [...layoutOrder.pages, pageName];
+                                  const updated = { ...layoutOrder, pages: newPages, hiddenPages: newHidden };
+                                  setLayoutOrder(updated);
+                                  localStorage.setItem("island-layout-order", JSON.stringify(updated));
+                                }
+                              }}
+                              style={{ 
+                                display: 'flex', 
+                                flexWrap: 'wrap', 
+                                gap: 8, 
+                                background: 'rgba(255,255,255,0.03)', 
+                                padding: 10, 
+                                borderRadius: 12,
+                                border: '1px solid rgba(255,255,255,0.05)',
+                                minHeight: '60px'
+                              }}>
+                              {layoutOrder.pages.map((page, idx) => (
+                                <div
+                                  key={page}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData("pageName", page);
+                                    e.dataTransfer.setData("pageIdx", idx);
+                                    e.dataTransfer.setData("fromType", "active");
+                                  }}
+                                  onDragOver={(e) => e.preventDefault()}
+                                  onDrop={(e) => {
+                                    e.stopPropagation();
+                                    const fromIdx = e.dataTransfer.getData("pageIdx");
+                                    const fromType = e.dataTransfer.getData("fromType");
+                                    const pageName = e.dataTransfer.getData("pageName");
+                                    
+                                    if (fromType === "active") {
+                                      const newPages = [...layoutOrder.pages];
+                                      const [moved] = newPages.splice(parseInt(fromIdx), 1);
+                                      newPages.splice(idx, 0, moved);
+                                      const updated = { ...layoutOrder, pages: newPages };
+                                      setLayoutOrder(updated);
+                                      localStorage.setItem("island-layout-order", JSON.stringify(updated));
+                                    } else {
+                                      const newHidden = layoutOrder.hiddenPages.filter(p => p !== pageName);
+                                      const newPages = [...layoutOrder.pages];
+                                      newPages.splice(idx, 0, pageName);
+                                      const updated = { ...layoutOrder, pages: newPages, hiddenPages: newHidden };
+                                      setLayoutOrder(updated);
+                                      localStorage.setItem("island-layout-order", JSON.stringify(updated));
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '6px 10px',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    borderRadius: 8,
+                                    fontSize: 11,
+                                    cursor: 'grab',
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    userSelect: 'none'
+                                  }}
+                                >
+                                  <GripVertical size={10} style={{ opacity: 0.4 }} />
+                                  {page.charAt(0).toUpperCase() + page.slice(1)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Hidden Pages */}
+                          <div style={{ width: '120px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ fontSize: 10, opacity: 0.5, fontWeight: 600 }}>HIDDEN</div>
+                            <div 
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={(e) => {
+                                const pageName = e.dataTransfer.getData("pageName");
+                                const fromType = e.dataTransfer.getData("fromType");
+                                if (fromType === "active") {
+                                  // Don't allow hiding 'home' if it's the only page
+                                  if (layoutOrder.pages.length <= 1) return;
+                                  
+                                  const newPages = layoutOrder.pages.filter(p => p !== pageName);
+                                  const newHidden = [...layoutOrder.hiddenPages, pageName];
+                                  const updated = { ...layoutOrder, pages: newPages, hiddenPages: newHidden };
+                                  setLayoutOrder(updated);
+                                  localStorage.setItem("island-layout-order", JSON.stringify(updated));
+                                  
+                                  // If hiding current view, go back to home
+                                  if (view === pageName) setView('home');
+                                }
+                              }}
+                              style={{ 
+                                display: 'flex', 
+                                flexDirection: 'column',
+                                gap: 6, 
+                                background: 'rgba(255,255,255,0.02)', 
+                                padding: 8, 
+                                borderRadius: 12,
+                                border: '1px dashed rgba(255,255,255,0.1)',
+                                minHeight: '60px'
+                              }}>
+                              {layoutOrder.hiddenPages.map((page, idx) => (
+                                <div
+                                  key={page}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData("pageName", page);
+                                    e.dataTransfer.setData("pageIdx", idx);
+                                    e.dataTransfer.setData("fromType", "hidden");
+                                  }}
+                                  style={{
+                                    padding: '4px 8px',
+                                    background: 'rgba(255,255,255,0.04)',
+                                    borderRadius: 6,
+                                    fontSize: 10,
+                                    cursor: 'grab',
+                                    border: '1px solid rgba(255,255,255,0.05)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    opacity: 0.6,
+                                    userSelect: 'none'
+                                  }}
+                                >
+                                  <GripVertical size={8} style={{ opacity: 0.3 }} />
+                                  {page.charAt(0).toUpperCase() + page.slice(1)}
+                                </div>
+                              ))}
+                              {layoutOrder.hiddenPages.length === 0 && (
+                                <div style={{ fontSize: 9, opacity: 0.2, textAlign: 'center', padding: '10px 0' }}>Drag here to hide</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Home Layout */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div 
+                        onClick={() => setExpandedSections(prev => ({ ...prev, home: !prev.home }))}
+                        style={{ 
+                          fontSize: 12, 
+                          fontWeight: 500, 
+                          opacity: 0.7, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 6, 
+                          cursor: 'pointer',
+                          userSelect: 'none'
+                        }}
+                      >
+                        {expandedSections.home ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        Home Tiles (Top / Bottom)
+                      </div>
+                      {expandedSections.home && (
+                        <div style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          gap: 8,
+                          background: 'rgba(255,255,255,0.03)', 
+                          padding: 10, 
+                          borderRadius: 12,
+                          border: '1px solid rgba(255,255,255,0.05)'
+                        }}>
+                          {layoutOrder.home.map((tile, idx) => (
+                            <div
+                              key={tile}
+                              draggable
+                              onDragStart={(e) => e.dataTransfer.setData("homeIdx", idx)}
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={(e) => {
+                                const fromIdx = parseInt(e.dataTransfer.getData("homeIdx"));
+                                const newHome = [...layoutOrder.home];
+                                const [moved] = newHome.splice(fromIdx, 1);
+                                newHome.splice(idx, 0, moved);
+                                const updated = { ...layoutOrder, home: newHome };
+                                setLayoutOrder(updated);
+                                localStorage.setItem("island-layout-order", JSON.stringify(updated));
+                              }}
+                              style={{
+                                padding: '8px 12px',
+                                background: 'rgba(255,255,255,0.08)',
+                                borderRadius: 10,
+                                fontSize: 11,
+                                cursor: 'grab',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                userSelect: 'none'
+                              }}
+                            >
+                              <GripVertical size={12} style={{ opacity: 0.4 }} />
+                              <span style={{ opacity: 0.5, fontSize: 10, width: 45 }}>{idx === 0 ? "TOP" : "BOTTOM"}</span>
+                              {tile === 'dropbox' ? 'Dropbox' : 'Clipboard'}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Weather Layout */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div 
+                        onClick={() => setExpandedSections(prev => ({ ...prev, weather: !prev.weather }))}
+                        style={{ 
+                          fontSize: 12, 
+                          fontWeight: 500, 
+                          opacity: 0.7, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 6, 
+                          cursor: 'pointer',
+                          userSelect: 'none'
+                        }}
+                      >
+                        {expandedSections.weather ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        Weather Tiles (Top / Bottom)
+                      </div>
+                      {expandedSections.weather && (
+                        <div style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          gap: 8,
+                          background: 'rgba(255,255,255,0.03)', 
+                          padding: 10, 
+                          borderRadius: 12,
+                          border: '1px solid rgba(255,255,255,0.05)'
+                        }}>
+                          {layoutOrder.weather.map((tile, idx) => (
+                            <div
+                              key={tile}
+                              draggable
+                              onDragStart={(e) => e.dataTransfer.setData("weatherIdx", idx)}
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={(e) => {
+                                const fromIdx = parseInt(e.dataTransfer.getData("weatherIdx"));
+                                const newWeather = [...layoutOrder.weather];
+                                const [moved] = newWeather.splice(fromIdx, 1);
+                                newWeather.splice(idx, 0, moved);
+                                const updated = { ...layoutOrder, weather: newWeather };
+                                setLayoutOrder(updated);
+                                localStorage.setItem("island-layout-order", JSON.stringify(updated));
+                              }}
+                              style={{
+                                padding: '8px 12px',
+                                background: 'rgba(255,255,255,0.08)',
+                                borderRadius: 10,
+                                fontSize: 11,
+                                cursor: 'grab',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                userSelect: 'none'
+                              }}
+                            >
+                              <GripVertical size={12} style={{ opacity: 0.4 }} />
+                              <span style={{ opacity: 0.5, fontSize: 10, width: 45 }}>{idx === 0 ? "TOP" : "BOTTOM"}</span>
+                              {tile === 'details' ? 'Weather Details' : 'Weather Main'}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Search Layout */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div 
+                        onClick={() => setExpandedSections(prev => ({ ...prev, search: !prev.search }))}
+                        style={{ 
+                          fontSize: 12, 
+                          fontWeight: 500, 
+                          opacity: 0.7, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 6, 
+                          cursor: 'pointer',
+                          userSelect: 'none'
+                        }}
+                      >
+                        {expandedSections.search ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        Search Tiles (Top / Bottom)
+                      </div>
+                      {expandedSections.search && (
+                        <div style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          gap: 8,
+                          background: 'rgba(255,255,255,0.03)', 
+                          padding: 10, 
+                          borderRadius: 12,
+                          border: '1px solid rgba(255,255,255,0.05)'
+                        }}>
+                          {layoutOrder.search.map((tile, idx) => (
+                            <div
+                              key={tile}
+                              draggable
+                              onDragStart={(e) => e.dataTransfer.setData("searchIdx", idx)}
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={(e) => {
+                                const fromIdx = parseInt(e.dataTransfer.getData("searchIdx"));
+                                const newSearch = [...layoutOrder.search];
+                                const [moved] = newSearch.splice(fromIdx, 1);
+                                newSearch.splice(idx, 0, moved);
+                                const updated = { ...layoutOrder, search: newSearch };
+                                setLayoutOrder(updated);
+                                localStorage.setItem("island-layout-order", JSON.stringify(updated));
+                              }}
+                              style={{
+                                padding: '8px 12px',
+                                background: 'rgba(255,255,255,0.08)',
+                                borderRadius: 10,
+                                fontSize: 11,
+                                cursor: 'grab',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                userSelect: 'none'
+                              }}
+                            >
+                              <GripVertical size={12} style={{ opacity: 0.4 }} />
+                              <span style={{ opacity: 0.5, fontSize: 10, width: 45 }}>{idx === 0 ? "TOP" : "BOTTOM"}</span>
+                              {tile === 'urls' ? 'Quick URLs' : 'Search Input'}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Todo Layout */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div 
+                        onClick={() => setExpandedSections(prev => ({ ...prev, todo: !prev.todo }))}
+                        style={{ 
+                          fontSize: 12, 
+                          fontWeight: 500, 
+                          opacity: 0.7, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 6, 
+                          cursor: 'pointer',
+                          userSelect: 'none'
+                        }}
+                      >
+                        {expandedSections.todo ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        Todo Tiles (Top / Bottom)
+                      </div>
+                      {expandedSections.todo && (
+                        <div style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          gap: 8,
+                          background: 'rgba(255,255,255,0.03)', 
+                          padding: 10, 
+                          borderRadius: 12,
+                          border: '1px solid rgba(255,255,255,0.05)'
+                        }}>
+                          {layoutOrder.todo.map((tile, idx) => (
+                            <div
+                              key={tile}
+                              draggable
+                              onDragStart={(e) => e.dataTransfer.setData("todoIdx", idx)}
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={(e) => {
+                                const fromIdx = parseInt(e.dataTransfer.getData("todoIdx"));
+                                const newTodo = [...layoutOrder.todo];
+                                const [moved] = newTodo.splice(fromIdx, 1);
+                                newTodo.splice(idx, 0, moved);
+                                const updated = { ...layoutOrder, todo: newTodo };
+                                setLayoutOrder(updated);
+                                localStorage.setItem("island-layout-order", JSON.stringify(updated));
+                              }}
+                              style={{
+                                padding: '8px 12px',
+                                background: 'rgba(255,255,255,0.08)',
+                                borderRadius: 10,
+                                fontSize: 11,
+                                cursor: 'grab',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                userSelect: 'none'
+                              }}
+                            >
+                              <GripVertical size={12} style={{ opacity: 0.4 }} />
+                              <span style={{ opacity: 0.5, fontSize: 10, width: 45 }}>{idx === 0 ? "TOP" : "BOTTOM"}</span>
+                              {tile === 'calendar' ? 'Calendar' : 'Timer'}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Visibility Toggles Section */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Visibility</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {/* Show Watch in Idle */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Show Watch in Idle</span>
+                      <div
+                        onClick={() => {
+                          const newVal = !showWatchInIdle;
+                          setShowWatchInIdle(newVal);
+                          localStorage.setItem("show-watch-idle", String(newVal));
+                        }}
+                        style={{
+                          width: 34,
+                          height: 20,
+                          borderRadius: 10,
+                          background: showWatchInIdle ? '#4facfe' : 'rgba(255,255,255,0.1)',
+                          position: 'relative',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: '50%',
+                          background: 'white',
+                          position: 'absolute',
+                          top: 2,
+                          left: showWatchInIdle ? 16 : 2,
+                          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }} />
+                      </div>
+                    </div>
+
+                    {/* Show Timer Border */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Timer Progress Border</span>
+                      <div
+                        onClick={() => {
+                          const newVal = !showTimerBorder;
+                          setShowTimerBorder(newVal);
+                          localStorage.setItem("show-timer-border", String(newVal));
+                        }}
+                        style={{
+                          width: 34,
+                          height: 20,
+                          borderRadius: 10,
+                          background: showTimerBorder ? '#4facfe' : 'rgba(255,255,255,0.1)',
+                          position: 'relative',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: '50%',
+                          background: 'white',
+                          position: 'absolute',
+                          top: 2,
+                          left: showTimerBorder ? 16 : 2,
+                          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* General Settings Section */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>General</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {/* Battery Alerts */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Battery Alerts</span>
+                      <div
+                        onClick={() => {
+                          const newVal = !batteryAlertsEnabled;
+                          setBatteryAlertsEnabled(newVal);
+                          localStorage.setItem("battery-alerts", String(newVal));
+                        }}
+                        style={{
+                          width: 34, height: 20, borderRadius: 10,
+                          background: batteryAlertsEnabled ? '#4facfe' : 'rgba(255,255,255,0.1)',
+                          position: 'relative', cursor: 'pointer', transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{
+                          width: 16, height: 16, borderRadius: '50%', background: 'white',
+                          position: 'absolute', top: 2, left: batteryAlertsEnabled ? 16 : 2,
+                          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }} />
+                      </div>
+                    </div>
+
+                    {/* Hour Format */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Hour Format</span>
+                      <select
+                        value={hourFormat ? "12-hr" : "24-hr"}
+                        onChange={handleHourFormatChange}
+                        style={{
+                          background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white',
+                          padding: '4px 8px', borderRadius: 8, fontSize: 11, outline: 'none'
+                        }}
+                      >
+                        <option value="12-hr">12-Hour</option>
+                        <option value="24-hr">24-Hour</option>
+                      </select>
+                    </div>
+
+                    {/* Weather Unit */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Weather Unit</span>
+                      <div style={{ display: 'flex', gap: 5, background: 'rgba(255,255,255,0.05)', padding: 3, borderRadius: 8 }}>
+                        {['f', 'c'].map(unit => (
+                          <div
+                            key={unit}
+                            onClick={() => {
+                              setweatherUnit(unit);
+                              localStorage.setItem("weather-unit", unit);
+                            }}
+                            style={{
+                              padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                              background: weatherUnit === unit ? 'rgba(255,255,255,0.1)' : 'transparent',
+                              color: weatherUnit === unit ? '#fff' : 'rgba(255,255,255,0.4)',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            {unit.toUpperCase()}°
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Auto Revert Time */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>Auto Revert Time</span>
+                        <span style={{ fontSize: 11, opacity: 0.5 }}>{autoRevertTime / 1000}s</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1000"
+                        max="20000"
+                        step="500"
+                        value={autoRevertTime}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setAutoRevertTime(val);
+                          localStorage.setItem("auto-revert-time", String(val));
+                        }}
+                        style={{ width: '100%', accentColor: '#4facfe' }}
+                      />
+                    </div>
+
+                    {/* Scroll Action */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Scroll Action</span>
+                      <select
+                        value={scrollAction}
+                        onChange={(e) => {
+                          setScrollAction(e.target.value);
+                          localStorage.setItem("scroll-action", e.target.value);
+                        }}
+                        style={{
+                          background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white',
+                          padding: '4px 8px', borderRadius: 8, fontSize: 11, outline: 'none'
+                        }}
+                      >
+                        <option value="volume">Volume</option>
+                        <option value="brightness">Brightness</option>
+                      </select>
+                    </div>
+
+                    {/* AI Model Selection */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>AI Model</span>
+                        <select
+                          value={aiModel}
+                          onChange={(e) => {
+                            setAiModel(e.target.value);
+                            localStorage.setItem("ai-model", e.target.value);
+                          }}
+                          style={{
+                            background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white',
+                            padding: '4px 8px', borderRadius: 8, fontSize: 11, outline: 'none'
+                          }}
+                        >
+                          <option value="openai/gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                          <option value="openai/gpt-4">GPT-4</option>
+                          <option value="anthropic/claude-2">Claude 2</option>
+                          <option value="google/palm-2-chat-bison">PaLM 2</option>
+                          <option value="custom">Custom (OpenRouter)</option>
+                        </select>
+                      </div>
+                      {aiModel === 'custom' && (
+                        <input
+                          type="text"
+                          placeholder="Enter model ID (e.g. meta-llama/llama-2-70b-chat)"
+                          value={customModel}
+                          onChange={(e) => {
+                            setCustomModel(e.target.value);
+                            localStorage.setItem("custom-model", e.target.value);
+                          }}
+                          style={{
+                            width: '100%', padding: '8px 12px', borderRadius: 8, border: 'none',
+                            background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: 11, outline: 'none'
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Island Appearance Section */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Appearance</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {/* Island Border */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Island Border</span>
+                      <div
+                        onClick={() => {
+                          const newVal = !islandBorderEnabled;
+                          setIslandBorderEnabled(newVal);
+                          localStorage.setItem("island-border", String(newVal));
+                        }}
+                        style={{
+                          width: 34, height: 20, borderRadius: 10,
+                          background: islandBorderEnabled ? '#4facfe' : 'rgba(255,255,255,0.1)',
+                          position: 'relative', cursor: 'pointer', transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{
+                          width: 16, height: 16, borderRadius: '50%', background: 'white',
+                          position: 'absolute', top: 2, left: islandBorderEnabled ? 16 : 2,
+                          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }} />
+                      </div>
+                    </div>
+
+                    {islandBorderEnabled && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 12, opacity: 0.7 }}>Border Color</span>
+                          <input
+                            type="color"
+                            value={islandBorderColor}
+                            onChange={(e) => {
+                              setIslandBorderColor(e.target.value);
+                              localStorage.setItem("island-border-color", e.target.value);
+                            }}
+                            style={{ width: 30, height: 20, border: 'none', background: 'transparent', cursor: 'pointer' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 12, opacity: 0.7 }}>Thickness</span>
+                            <span style={{ fontSize: 11, opacity: 0.5 }}>{islandBorderThickness}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="1"
+                            max="5"
+                            step="0.5"
+                            value={islandBorderThickness}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setIslandBorderThickness(val);
+                              localStorage.setItem("island-border-thickness", String(val));
+                            }}
+                            style={{ width: '100%', accentColor: '#4facfe' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 12, opacity: 0.7 }}>Border Style</span>
+                          <select
+                            value={islandBorderStyle}
+                            onChange={(e) => {
+                              setIslandBorderStyle(e.target.value);
+                              localStorage.setItem("island-border-style", e.target.value);
+                            }}
+                            style={{
+                              background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white',
+                              padding: '2px 6px', borderRadius: 6, fontSize: 10, outline: 'none'
+                            }}
+                          >
+                            <option value="solid">Solid</option>
+                            <option value="dashed">Dashed</option>
+                            <option value="dotted">Dotted</option>
+                            <option value="double">Double</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Font Size */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>Font Size</span>
+                        <span style={{ fontSize: 11, opacity: 0.5 }}>{fontSize}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="10"
+                        max="24"
+                        step="1"
+                        value={fontSize}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setFontSize(val);
+                          localStorage.setItem("island-font-size", String(val));
+                        }}
+                        style={{ width: '100%', accentColor: '#4facfe' }}
+                      />
+                    </div>
+
+                    {/* Corner Radius */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>Corner Radius</span>
+                        <span style={{ fontSize: 11, opacity: 0.5 }}>{cornerRadius}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="50"
+                        step="1"
+                        value={cornerRadius}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setCornerRadius(val);
+                          localStorage.setItem("island-corner-radius", String(val));
+                        }}
+                        style={{ width: '100%', accentColor: '#4facfe' }}
+                      />
+                    </div>
+
+                    {/* Island Opacity */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>Island Opacity</span>
+                        <span style={{ fontSize: 11, opacity: 0.5 }}>{Math.round(opacity * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="1"
+                        step="0.01"
+                        value={opacity}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setOpacity(val);
+                          localStorage.setItem("island-opacity", String(val));
+                        }}
+                        style={{ width: '100%', accentColor: '#4facfe' }}
+                      />
+                    </div>
+
+                    {/* Island Position */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>Top Position</span>
+                        <span style={{ fontSize: 11, opacity: 0.5 }}>{islandPosition}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={islandPosition}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setIslandPosition(val);
+                          localStorage.setItem("island-position", String(val));
+                        }}
+                        style={{ width: '100%', accentColor: '#4facfe' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Standby Mode Section */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Standby & Modes</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {/* Standby Mode */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Standby Mode</span>
+                      <div
+                        onClick={() => {
+                          const newVal = !standbyBorderEnabled;
+                          setStandbyEnabled(newVal);
+                          localStorage.setItem("standby-mode", String(newVal));
+                          if (newVal) setLargeStandbyEnabled(false);
+                        }}
+                        style={{
+                          width: 34, height: 20, borderRadius: 10,
+                          background: standbyBorderEnabled ? '#4facfe' : 'rgba(255,255,255,0.1)',
+                          position: 'relative', cursor: 'pointer', transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{
+                          width: 16, height: 16, borderRadius: '50%', background: 'white',
+                          position: 'absolute', top: 2, left: standbyBorderEnabled ? 16 : 2,
+                          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }} />
+                      </div>
+                    </div>
+
+                    {/* Large Standby Mode */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Large Standby</span>
+                      <div
+                        onClick={() => {
+                          const newVal = !largeStandbyEnabled;
+                          setLargeStandbyEnabled(newVal);
+                          localStorage.setItem("large-standby-mode", String(newVal));
+                          if (newVal) setStandbyEnabled(false);
+                        }}
+                        style={{
+                          width: 34, height: 20, borderRadius: 10,
+                          background: largeStandbyEnabled ? '#4facfe' : 'rgba(255,255,255,0.1)',
+                          position: 'relative', cursor: 'pointer', transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{
+                          width: 16, height: 16, borderRadius: '50%', background: 'white',
+                          position: 'absolute', top: 2, left: largeStandbyEnabled ? 16 : 2,
+                          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }} />
+                      </div>
+                    </div>
+
+                    {/* Hide Island when Not Active */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Hide when Not Active</span>
+                      <div
+                        onClick={() => {
+                          const newVal = !hideNotActiveIslandEnabled;
+                          sethideNotActiveIslandEnabled(newVal);
+                          localStorage.setItem("hide-island-notactive", String(newVal));
+                        }}
+                        style={{
+                          width: 34, height: 20, borderRadius: 10,
+                          background: hideNotActiveIslandEnabled ? '#4facfe' : 'rgba(255,255,255,0.1)',
+                          position: 'relative', cursor: 'pointer', transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{
+                          width: 16, height: 16, borderRadius: '50%', background: 'white',
+                          position: 'absolute', top: 2, left: hideNotActiveIslandEnabled ? 16 : 2,
+                          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reset Section */}
+                <div style={{ marginTop: 'auto', paddingTop: 10 }}>
+                  <div
+                    onClick={handleResetSettings}
+                    style={{
+                      padding: '12px',
+                      borderRadius: 12,
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      color: '#ef4444',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      textAlign: 'center',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    RESET ALL SETTINGS
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Clock on Left */}
           <div style={{ position: 'absolute', top: 15, left: 25, right: 25, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pointerEvents: 'none' }}>
@@ -1982,18 +3644,23 @@ const handleDropToMove = async (e) => {
           {/* Big Clock Restoration */}
           <div style={{
             textAlign: 'center',
-            animation: shouldAnimateClock ? 'clockExpand 0.4s cubic-bezier(0.16, 1, 0.3, 1)' : 'none',
             transformOrigin: 'center center',
-            marginTop: 10
+            marginTop: 10,
+            fontFamily: clockFont === 'w95' ? '"MS Sans Serif", "Microsoft Sans Serif", sans-serif' : 
+                       clockFont === 'OpenRunde' ? '"OpenRunde", sans-serif' : 
+                       clockFont
           }}>
-            <style>{`
-                  @keyframes clockExpand {
-                    0% { opacity: 0; transform: scale(0.8) translateY(10px); }
-                    100% { opacity: 1; transform: scale(1) translateY(0); }
-                  }
-                `}</style>
-            <h1 style={{ fontSize: 72, margin: 0, lineHeight: 1, fontWeight: 700, letterSpacing: -2 }}>{time}</h1>
-            <h2 style={{ fontSize: 16, margin: '5px 0 0 0', opacity: 0.5, letterSpacing: 0.5, fontWeight: 500 }}>{formatDateShort()}</h2>
+            {clockStyle === 'analog' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15 }}>
+                <AnalogClock size={140} color={textColor} style={analogStyle} />
+                <h2 style={{ fontSize: 16, margin: 0, opacity: 0.5, letterSpacing: 0.5, fontWeight: 500 }}>{formatDateShort()}</h2>
+              </div>
+            ) : (
+              <>
+                <h1 style={{ fontSize: 72, margin: 0, lineHeight: 1, fontWeight: 700, letterSpacing: -2 }}>{time}</h1>
+                <h2 style={{ fontSize: 16, margin: '5px 0 0 0', opacity: 0.5, letterSpacing: 0.5, fontWeight: 500 }}>{formatDateShort()}</h2>
+              </>
+            )}
           </div>
         </div>
         {/* Music View Redesign */}
@@ -2001,7 +3668,7 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'music' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'music' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'music' && mode === 'large') ? 'translate(0,0)' : view === 'home' ? 'translateX(100%)' : view === 'ai' ? 'translateX(-100%)' : 'none',
+          transform: getHorizontalTransform('music'),
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
         }}>
@@ -2051,7 +3718,7 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'weather' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'weather' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'weather' && mode === 'large') ? 'translate(0,0)' : (view === 'weather_details' ? 'translateY(-100%)' : 'translateX(-100%)'),
+          transform: view === 'weather_details' ? (layoutOrder.weather[0] === 'details' ? 'translateY(-100%)' : 'translateY(100%)') : getHorizontalTransform('weather'),
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '20px'
@@ -2069,7 +3736,7 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'weather_details' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'weather_details' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'weather_details' && mode === 'large') ? 'translate(0,0)' : 'translateY(100%)',
+          transform: view === 'weather_details' ? 'translate(0,0)' : 'translateY(100%)',
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '20px'
@@ -2122,7 +3789,7 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'search' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'search' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'search' && mode === 'large') ? 'translate(0,0)' : (view === 'search_urls' ? 'translateY(-100%)' : (view === 'weather' ? 'translateX(100%)' : 'translateX(-100%)')),
+          transform: view === 'search_urls' ? (layoutOrder.search[0] === 'urls' ? 'translateY(-100%)' : 'translateY(100%)') : getHorizontalTransform('search'),
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '20px'
@@ -2132,18 +3799,96 @@ const handleDropToMove = async (e) => {
             autoFocus={view === 'search' && mode === 'large'}
             type="text"
             placeholder="Search Google or type URL..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             style={{ width: '90%', padding: '12px 20px', borderRadius: 25, border: 'none', outline: 'none', background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: 16 }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                const val = e.target.value;
+                const val = searchQuery;
                 if (!val) return;
                 const url = val.includes('.') && !val.includes(' ') ? (val.startsWith('http') ? val : `https://${val}`) : `https://www.google.com/search?q=${encodeURIComponent(val)}`;
                 window.electronAPI?.openExternal ? window.electronAPI.openExternal(url) : window.open(url, "_blank");
                 setView('home');
+                setSearchQuery('');
               }
               if (e.key === 'Escape') setView('home');
             }}
           />
+
+          {/* Search Results */}
+          {searchResults.length > 0 && (
+            <div style={{
+              width: '95%',
+              marginTop: 15,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              animation: 'appear 0.2s ease-out',
+              overflowY: 'auto',
+              maxHeight: 400,
+              paddingRight: 5
+            }}>
+              {searchResults.map((result, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    window.electronAPI?.openExternal ? window.electronAPI.openExternal(result.url) : window.open(result.url, "_blank");
+                    setView('home');
+                    setSearchQuery('');
+                  }}
+                  style={{
+                    padding: '12px 16px',
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: 15,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                    transition: 'all 0.2s ease',
+                    border: '1px solid rgba(255,255,255,0.03)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                    e.currentTarget.style.transform = 'translateX(5px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {result.icon ? (
+                      <img 
+                        src={result.icon.startsWith('http') ? result.icon : `https://duckduckgo.com${result.icon}`}
+                        alt="icon"
+                        style={{ width: 16, height: 16, borderRadius: 4, objectFit: 'contain' }}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = result.url ? `https://www.google.com/s2/favicons?sz=32&domain=${new URL(result.url).hostname}` : '';
+                        }}
+                      />
+                    ) : result.url ? (
+                      <img 
+                        src={`https://www.google.com/s2/favicons?sz=32&domain=${new URL(result.url).hostname}`} 
+                        alt="icon"
+                        style={{ width: 16, height: 16, borderRadius: 4 }}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    ) : null}
+                    {result.isSuggestion ? <Search size={12} opacity={0.4} /> : !result.url && <Box size={12} color="#4facfe" />}
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {result.title}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: 11, opacity: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {result.description}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Quick URLs View */}
@@ -2151,7 +3896,7 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'search_urls' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'search_urls' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'search_urls' && mode === 'large') ? 'translate(0,0)' : 'translateY(100%)',
+          transform: view === 'search_urls' ? 'translate(0,0)' : 'translateY(100%)',
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '20px'
@@ -2334,7 +4079,7 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'ai' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'ai' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'ai' && mode === 'large') ? 'translate(0,0)' : (view === 'todo' ? 'translateX(-100%)' : 'translateX(100%)'),
+          transform: getHorizontalTransform('ai'),
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 20px 20px 20px'
         }}>
@@ -2441,13 +4186,11 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'todo' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'todo' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'todo' && mode === 'large')
-            ? 'translate(0,0)'
-            : (view === 'todo_timer')
-              ? 'translateY(-100%)'
-              : (view === 'todo_calendar' || view === 'todo_calendar_events')
-                ? 'translateY(100%)'
-                : 'translateX(100%)',
+          transform: (view === (layoutOrder.todo[1] === 'calendar' ? 'todo_calendar' : 'todo_timer'))
+            ? 'translateY(-100%)'
+            : (view === (layoutOrder.todo[0] === 'calendar' ? 'todo_calendar' : 'todo_timer') || view === 'todo_calendar_events')
+              ? 'translateY(100%)'
+              : getHorizontalTransform('todo'),
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
         }}>
@@ -2540,7 +4283,7 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'todo_calendar' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'todo_calendar' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'todo_calendar' && mode === 'large') ? 'translate(0,0)' : (view === 'todo' ? 'translateY(100%)' : 'translateY(-100%)'),
+          transform: view === 'todo_calendar' ? 'translate(0,0)' : (layoutOrder.todo[0] === 'calendar' ? 'translateY(-100%)' : 'translateY(100%)'),
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
         }}>
@@ -2633,7 +4376,7 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'todo_calendar_events' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'todo_calendar_events' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'todo_calendar_events' && mode === 'large') ? 'translate(0,0)' : 'translateY(-100%)',
+          transform: view === 'todo_calendar_events' ? 'translate(0,0)' : 'translateY(-100%)',
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
         }}>
@@ -2820,7 +4563,7 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'todo_timer' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'todo_timer' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'todo_timer' && mode === 'large') ? 'translate(0,0)' : 'translateY(100%)',
+          transform: view === 'todo_timer' ? 'translate(0,0)' : (layoutOrder.todo[0] === 'timer' ? 'translateY(-100%)' : 'translateY(100%)'),
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '40px 20px 20px 20px'
@@ -2872,7 +4615,13 @@ const handleDropToMove = async (e) => {
             {watchMode === 'timer' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
                 <div 
-                  onClick={() => setTimerSeconds(prev => Math.max(0, prev - 60))}
+                  onClick={() => {
+                    setTimerSeconds(prev => {
+                      const next = Math.max(0, prev - 60);
+                      setTimerTotalSeconds(next);
+                      return next;
+                    });
+                  }}
                   style={{ cursor: 'pointer', opacity: 0.3, transition: 'opacity 0.2s' }}
                   onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
                   onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
@@ -2885,7 +4634,13 @@ const handleDropToMove = async (e) => {
                 </div>
 
                 <div 
-                  onClick={() => setTimerSeconds(prev => prev + 60)}
+                  onClick={() => {
+                    setTimerSeconds(prev => {
+                      const next = prev + 60;
+                      setTimerTotalSeconds(next);
+                      return next;
+                    });
+                  }}
                   style={{ cursor: 'pointer', opacity: 0.3, transition: 'opacity 0.2s' }}
                   onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
                   onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
@@ -2903,6 +4658,7 @@ const handleDropToMove = async (e) => {
               <div 
                 onClick={() => {
                   if (watchMode === 'timer') {
+                    if (!isTimerRunning && timerSeconds > 0) setTimerTotalSeconds(timerSeconds);
                     setIsTimerRunning(!isTimerRunning);
                   } else {
                     setIsStopwatchRunning(!isStopwatchRunning);
@@ -2948,7 +4704,7 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'dropbox' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'dropbox' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'dropbox' && mode === 'large') ? 'translate(0,0)' : 'translateY(100%)',
+          transform: view === 'dropbox' ? 'translate(0,0)' : (layoutOrder.home[0] === 'dropbox' ? 'translateY(-100%)' : 'translateY(100%)'),
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '10px 10px 25px 10px', gap: 8
         }}>
@@ -3031,7 +4787,7 @@ const handleDropToMove = async (e) => {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'clipboard' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'clipboard' && mode === 'large') ? 'auto' : 'none',
-          transform: (view === 'clipboard' && mode === 'large') ? 'translate(0,0)' : 'translateY(100%)',
+          transform: view === 'clipboard' ? 'translate(0,0)' : (layoutOrder.home[0] === 'clipboard' ? 'translateY(-100%)' : 'translateY(100%)'),
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '15px 15px 20px 15px', gap: 10
         }}>

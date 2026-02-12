@@ -16,6 +16,12 @@ The Dynamic Island for Windows.
 - ✅ **Bluetooth & Battery Alerts**: Real-time status for connected devices and charging/battery levels.
 - ✅ **Search & URL Bar**: Quickly search Google or navigate directly to URLs.
 - ✅ **Themes & Customization**: Supports multiple themes (Default, Win95, SleekBlack) and custom backgrounds/opacity/corners.
+- ✅ **Interactive Banners**: Real-time alerts and progress bars for Timers, Stopwatches, and upcoming Calendar events.
+- ✅ **Timer Progress Border**: Visual progress ring around the island during active countdowns.
+- ✅ **Custom Clock Styles**: Multiple analog and digital clock designs with custom font support (W95, OpenRunde, etc.).
+- ✅ **In-Bar Settings**: Directly customize themes, layouts, and system settings via the expanded settings menu.
+- ✅ **Advanced Search**: Integrated URL bar for direct navigation and real-time web search results.
+- ✅ **Dynamic Layouts**: Fully customizable page order and visibility with drag-and-drop reordering for all tiles.
 - ✅ **Standby & Stealth Modes**: Configurable visibility and persistence settings.
 - ✅ **Keyboard Shortcuts**: Efficient navigation and control via hotkeys.
 - ✅ **Scroll Actions**: Control volume or brightness directly by scrolling over the island.
