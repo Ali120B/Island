@@ -112,23 +112,23 @@ const AnalogClock = ({ size = 150, color = "#fff", style = "simple" }) => {
           </linearGradient>
         </defs>
         <circle cx="50" cy="50" r="45" stroke="url(#grad1)" strokeWidth="2" fill="none" opacity="0.1" />
-        
+
         {/* Hour Dot */}
-        <circle 
-          cx={hrPos.x} cy={hrPos.y} r="4" 
+        <circle
+          cx={hrPos.x} cy={hrPos.y} r="4"
           fill="url(#grad1)"
         />
-        
+
         {/* Minute Dot */}
-        <circle 
-          cx={minPos.x} cy={minPos.y} r="3" 
+        <circle
+          cx={minPos.x} cy={minPos.y} r="3"
           fill={color}
           opacity="0.8"
         />
-        
+
         {/* Second Dot */}
-        <circle 
-          cx={secPos.x} cy={secPos.y} r="1.5" 
+        <circle
+          cx={secPos.x} cy={secPos.y} r="1.5"
           fill="#4facfe"
         />
 
@@ -185,12 +185,12 @@ const AnalogClock = ({ size = 150, color = "#fff", style = "simple" }) => {
   return (
     <div style={{ width: size, height: size, position: 'relative' }}>
       <svg width={size} height={size} viewBox="0 0 100 100">
-        {style === 'cyber' ? renderCyber() : 
-         style === 'minimalist' ? renderMinimalist() : 
-         style === 'cool' ? renderCool() : 
-         style === 'retro' ? renderRetro() :
-         style === 'modern' ? renderModern() :
-         renderSimple()}
+        {style === 'cyber' ? renderCyber() :
+          style === 'minimalist' ? renderMinimalist() :
+            style === 'cool' ? renderCool() :
+              style === 'retro' ? renderRetro() :
+                style === 'modern' ? renderModern() :
+                  renderSimple()}
       </svg>
     </div>
   );
@@ -268,8 +268,16 @@ export default function Island() {
   const [prevView, setPrevView] = useState("home");
   const [showArrows, setShowArrows] = useState(localStorage.getItem("show-nav-arrows") === "true");
   const [infiniteScroll, setInfiniteScroll] = useState(localStorage.getItem("infinite-scroll") === "true");
-  const [tempFiles, setTempFiles] = useState([]);
+  const [tempFiles, setTempFiles] = useState(() => {
+    const saved = localStorage.getItem("dropbox-files");
+    return saved ? JSON.parse(saved) : [];
+  });
+  useEffect(() => {
+    localStorage.setItem("dropbox-files", JSON.stringify(tempFiles));
+  }, [tempFiles]);
   const [isDraggingOver, setIsDraggingOver] = useState(null); // 'copy' or 'paste' or 'move'
+  const [isDraggingOut, setIsDraggingOut] = useState(false);
+  const isDraggingOutRef = useRef(false);
   const isMouseDown = useRef(false);
   const isMouseOver = useRef(false);
   const [chatHistory, setChatHistory] = useState([]);
@@ -317,7 +325,7 @@ export default function Island() {
       if (showInIslandSettings && settingsRef.current && !settingsRef.current.contains(event.target)) {
         setShowInIslandSettings(false);
       }
-      
+
       // If clicking outside while in search view, reset search
       if (view === 'search' && !event.target.closest('input')) {
         setSearchQuery('');
@@ -340,9 +348,9 @@ export default function Island() {
         // DuckDuckGo API for "Instant Answers" and related topics
         const response = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(searchQuery)}&format=json&no_html=1&skip_disambig=1`);
         const data = await response.json();
-        
+
         let results = [];
-        
+
         // 1. Check for "Abstract" (The main instant answer)
         if (data.AbstractText && data.AbstractURL) {
           results.push({
@@ -382,7 +390,16 @@ export default function Island() {
           }
         }
 
-        setSearchResults(results.slice(0, 5));
+        const finalResults = results.slice(0, 5);
+        setSearchResults(finalResults);
+
+        // Force a small delay then re-set results to ensure layout engine catches the height change
+        // This fixes the issue where the bar sometimes fails to expand on the first try
+        if (finalResults.length > 0) {
+          setTimeout(() => {
+            setSearchResults([...finalResults]);
+          }, 50);
+        }
       } catch (err) {
         console.error("Search fetch error:", err);
       }
@@ -577,10 +594,10 @@ export default function Island() {
     let h = parseInt(parts[0]);
     let m = parts[1] || '00';
     let s = parts[2] || '00';
-    
+
     if (amPm === 'PM' && h < 12) h += 12;
     if (amPm === 'AM' && h === 12) h = 0;
-    
+
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
@@ -636,8 +653,8 @@ export default function Island() {
   const formatTimeInput = (value) => {
     const digits = value.replace(/\D/g, '');
     if (digits.length <= 2) return digits;
-    if (digits.length <= 4) return `${digits.slice(0,2)}:${digits.slice(2)}`;
-    return `${digits.slice(0,2)}:${digits.slice(2,4)}:${digits.slice(4,6)}`;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}:${digits.slice(2, 4)}:${digits.slice(4, 6)}`;
   };
 
   const getTodayIso = () => {
@@ -651,7 +668,7 @@ export default function Island() {
     audio.loop = true;
     audio.volume = 1.0;
     audio.muted = false;
-    
+
     // Explicitly load and play
     audio.load();
     const playPromise = audio.play();
@@ -750,8 +767,8 @@ export default function Island() {
     loadData();
 
     const handleDown = () => { isMouseDown.current = true; };
-    const handleUp = () => { 
-      isMouseDown.current = false; 
+    const handleUp = () => {
+      isMouseDown.current = false;
       if (!isMouseOver.current && window.electronAPI) {
         window.electronAPI.setIgnoreMouseEvents(true, true);
       }
@@ -856,9 +873,25 @@ export default function Island() {
       setView('home');
     }
   }, [mode, view]);
+  // Timer and Stopwatch Interval Management
   useEffect(() => {
+    // Clear any existing intervals first
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    if (stopwatchIntervalRef.current) {
+      clearInterval(stopwatchIntervalRef.current);
+      stopwatchIntervalRef.current = null;
+    }
+
+    // Mutual exclusivity: if both are somehow true, prioritize timer
+    if (isTimerRunning && isStopwatchRunning) {
+      setIsStopwatchRunning(false);
+      return; // The next effect run (due to state change) will handle the timer
+    }
+
     if (isTimerRunning) {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = setInterval(() => {
         setTimerSeconds(prev => {
           if (prev <= 1) {
@@ -868,33 +901,23 @@ export default function Island() {
           return prev - 1;
         });
       }, 1000);
-    } else {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    }
-    return () => {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    };
-  }, [isTimerRunning]);
-
-  useEffect(() => {
-    if (isStopwatchRunning) {
-      if (stopwatchIntervalRef.current) clearInterval(stopwatchIntervalRef.current);
+    } else if (isStopwatchRunning) {
       stopwatchIntervalRef.current = setInterval(() => {
         setStopwatchSeconds(prev => prev + 1);
       }, 1000);
-    } else {
-      if (stopwatchIntervalRef.current) clearInterval(stopwatchIntervalRef.current);
     }
-    return () => {
-      if (stopwatchIntervalRef.current) clearInterval(stopwatchIntervalRef.current);
-    };
-  }, [isStopwatchRunning]);
 
-  useEffect(() => {
-    if (isTimerRunning && isStopwatchRunning) {
-      setIsStopwatchRunning(false);
-    }
-  }, [isTimerRunning]);
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+      if (stopwatchIntervalRef.current) {
+        clearInterval(stopwatchIntervalRef.current);
+        stopwatchIntervalRef.current = null;
+      }
+    };
+  }, [isTimerRunning, isStopwatchRunning]);
 
   useEffect(() => {
     if (!isTimerRunning && !isStopwatchRunning && timerSeconds === 0 && stopwatchSeconds === 0) {
@@ -953,12 +976,12 @@ export default function Island() {
   // Handle Window Blur/Focus
   useEffect(() => {
     const handleBlur = () => {
-      if (autoRevertTime <= 0) return;
+      if (autoRevertTime <= 0 || isDraggingOutRef.current) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         // Always close in-island settings on blur
         setShowInIslandSettings(false);
-        
+
         if (view !== 'home' && view !== 'dropbox') {
           setMode('still');
           setView('home');
@@ -986,7 +1009,7 @@ export default function Island() {
 
   // Inactivity Revert (while focused)
   useEffect(() => {
-    if (view === 'home' || view === 'dropbox' || autoRevertTime <= 0) return;
+    if (view === 'home' || view === 'dropbox' || autoRevertTime <= 0 || isDraggingOut) return;
 
     const checkInactivity = () => {
       const diff = Date.now() - lastInteractionRef.current;
@@ -1070,8 +1093,8 @@ export default function Island() {
       setCustomModel(localStorage.getItem("custom-model") || "");
       setScrollAction(localStorage.getItem("scroll-action") || "volume");
       setClockStyle(localStorage.getItem("clock-style") || "digital");
-          setAnalogStyle(localStorage.getItem("analog-style") || "simple");
-          setClockFont(localStorage.getItem("clock-font") || "OpenRunde");
+      setAnalogStyle(localStorage.getItem("analog-style") || "simple");
+      setClockFont(localStorage.getItem("clock-font") || "OpenRunde");
       setShowWatchInIdle(localStorage.getItem("show-watch-idle") !== "false");
       setShowTimerBorder(localStorage.getItem("show-timer-border") !== "false");
     };
@@ -1143,10 +1166,10 @@ export default function Island() {
 
       const currentQuestion = userText;
       setUserText(""); // Clear input immediately
-      
+
       // Add user message
       setMessages(prev => [...prev, { role: 'user', content: currentQuestion }]);
-      
+
       // Add placeholder for AI response
       setMessages(prev => [...prev, { role: 'assistant', content: "" }]);
 
@@ -1190,9 +1213,9 @@ export default function Island() {
 
       if (!fullText) {
         setMessages(prev => {
-             const newHistory = [...prev];
-             newHistory[newHistory.length - 1].content = "No response streamed.";
-             return newHistory;
+          const newHistory = [...prev];
+          newHistory[newHistory.length - 1].content = "No response streamed.";
+          return newHistory;
         });
       } else {
         // Save to history
@@ -1257,94 +1280,72 @@ export default function Island() {
   };
 
   // --- Dropbox Logic ---
-  const refreshTempFiles = async () => {
-    if (window.electronAPI?.getTempFiles) {
-      const files = await window.electronAPI.getTempFiles();
-      setTempFiles(files);
-    }
+  const refreshTempFiles = () => {
+    const saved = localStorage.getItem("dropbox-files");
+    setTempFiles(saved ? JSON.parse(saved) : []);
   };
 
   useEffect(() => {
-    if (view === 'dropbox') {
-      refreshTempFiles();
-    }
-  }, [view]);
-
-  useEffect(() => {
     if (window.electronAPI?.onDragFinished) {
-    window.electronAPI.onDragFinished(async (filePath) => {
-      // If it was a move operation, clear it from temp
-      const fileObj = tempFiles.find(f => f.path === filePath);
-      if (fileObj && fileObj.type === 'move') {
-        await window.electronAPI.clearTempFiles([filePath]);
-      }
-      
-      refreshTempFiles();
-      // RESTORE mouse events after drag finishes
-      if (window.electronAPI?.setIgnoreMouseEvents) {
-        window.electronAPI.setIgnoreMouseEvents(false);
-      }
-    });
-  }
-}, [tempFiles]);
+      window.electronAPI.onDragFinished(async (filePath) => {
+        // If it was a move operation, remove it from our list as it was "moved" to a new location
+        const fileObj = tempFiles.find(f => f.path === filePath);
+        if (fileObj && fileObj.type === 'move') {
+          setTempFiles(prev => prev.filter(f => f.path !== filePath));
+        }
 
-const handleDropToCopy = async (e) => {
-  e.preventDefault();
-  setIsDraggingOver(null);
-  const files = e.dataTransfer.files;
-  if (files.length > 0) {
-    const paths = Array.from(files).map(f => window.electronAPI.getPathForFile(f));
-    // Default to copy for now
-    await window.electronAPI.copyToTemp(paths);
-    refreshTempFiles();
-  }
-};
+        // RESTORE mouse events after drag finishes
+        if (window.electronAPI?.setIgnoreMouseEvents) {
+          window.electronAPI.setIgnoreMouseEvents(false);
+        }
+      });
+    }
+  }, [tempFiles]);
 
-const handleDropToMove = async (e) => {
-  e.preventDefault();
-  setIsDraggingOver(null);
-  const files = e.dataTransfer.files;
-  if (files.length > 0) {
-    const paths = Array.from(files).map(f => window.electronAPI.getPathForFile(f));
-    await window.electronAPI.moveToTemp(paths);
-    refreshTempFiles();
-  }
-};
+  const handleDropToCopy = async (e) => {
+    e.preventDefault();
+    setIsDraggingOver(null);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const newFiles = Array.from(files).map(f => ({
+        name: f.name,
+        path: window.electronAPI.getPathForFile(f),
+        type: 'copy'
+      }));
+      setTempFiles(prev => [...prev, ...newFiles]);
+    }
+  };
+
+  const handleDropToMove = async (e) => {
+    e.preventDefault();
+    setIsDraggingOver(null);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const newFiles = Array.from(files).map(f => ({
+        name: f.name,
+        path: window.electronAPI.getPathForFile(f),
+        type: 'move'
+      }));
+      setTempFiles(prev => [...prev, ...newFiles]);
+    }
+  };
 
   const handleDragStartFromPaste = (e, file) => {
-    // 1. Set the DownloadURL metadata. This is a Chromium-standard way to 
-    //    signal to the OS that this is a file transfer.
-    const fileUrl = `file:///${file.path.replace(/\\/g, '/')}`;
-    const downloadData = `application/octet-stream:${file.name}:${fileUrl}`;
-    
-    e.dataTransfer.setData('DownloadURL', downloadData);
-    e.dataTransfer.setData('text/uri-list', fileUrl);
-    e.dataTransfer.setData('text/plain', file.path);
-    
-    // 2. Important: Electron's startDrag will take over, but we need to 
-    //    ensure we don't preventDefault if we want the dataTransfer to be valid,
-    //    UNLESS startDrag is used exclusively. 
-    //    However, to fix "drags the path", we will use startDrag exclusively.
     e.preventDefault();
-    
-    console.log(`[Renderer] Initiating NATIVE file drag for: ${file.path}`);
-    
     if (window.electronAPI?.startDrag) {
-      // CRITICAL: We MUST tell the window to ignore mouse events immediately
-      // when a drag starts, otherwise the full-screen transparent window
-      // will block the OS from seeing the desktop/apps underneath.
-      window.electronAPI.setIgnoreMouseEvents(true, false);
+      setIsDraggingOut(true);
+      isDraggingOutRef.current = true;
+      // Logic moved to main.js for better synchronization with OS drag state
       window.electronAPI.startDrag(file.path);
     }
   };
 
-  const handleClear = async (file = null) => {
-    if (file) {
-      await window.electronAPI.clearTempFiles([file.path]);
+  const handleClear = (fileToRemove = null) => {
+    if (fileToRemove) {
+      setTempFiles(prev => prev.filter(f => f.path !== fileToRemove.path));
     } else {
-      await window.electronAPI.clearTempFiles([]);
+      setTempFiles([]);
     }
-    refreshTempFiles();
   };
 
   // Get battery info
@@ -1363,7 +1364,7 @@ const handleDropToMove = async (e) => {
       try {
         battery = await navigator.getBattery();
         updateBattery(battery);
-        
+
         battery.addEventListener("chargingchange", () => updateBattery(battery));
         battery.addEventListener("levelchange", () => updateBattery(battery));
       } catch (err) {
@@ -1373,7 +1374,7 @@ const handleDropToMove = async (e) => {
     };
 
     setupBattery();
-    
+
     // Fallback polling every 10 mins as requested
     const interval = setInterval(() => {
       if (battery) updateBattery(battery);
@@ -1443,6 +1444,7 @@ const handleDropToMove = async (e) => {
 
   // Standby Mode
   useEffect(() => {
+    if (isDraggingOutRef.current) return;
     if (standbyBorderEnabled) {
       if (mode !== 'quick') setMode('quick');
     } else if (largeStandbyEnabled) {
@@ -1450,7 +1452,7 @@ const handleDropToMove = async (e) => {
     } else {
       if (mode !== 'still') setMode('still');
     }
-  }, [standbyBorderEnabled, largeStandbyEnabled]);
+  }, [standbyBorderEnabled, largeStandbyEnabled, isDraggingOut]);
 
   // Get Island Details (Copyright/Version)
   const getBatteryIcon = () => {
@@ -1459,47 +1461,6 @@ const handleDropToMove = async (e) => {
     if (percent >= 40) return <BatteryMedium size={14} color={iconColor} />;
     return <BatteryLow size={14} color={iconColor} />;
   };
-
-  // Timer logic
-  useEffect(() => {
-    if (isTimerRunning && isStopwatchRunning) {
-      setIsStopwatchRunning(false);
-    }
-  }, [isTimerRunning]);
-
-  useEffect(() => {
-    if (isStopwatchRunning && isTimerRunning) {
-      setIsTimerRunning(false);
-    }
-  }, [isStopwatchRunning]);
-
-  useEffect(() => {
-    let interval;
-    if (isTimerRunning && timerSeconds > 0) {
-      interval = setInterval(() => {
-        setTimerSeconds(prev => {
-          if (prev <= 1) {
-            setIsTimerRunning(false);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else if (timerSeconds === 0) {
-      setIsTimerRunning(false);
-    }
-    return () => clearInterval(interval);
-  }, [isTimerRunning, timerSeconds]);
-
-  useEffect(() => {
-    let interval;
-    if (isStopwatchRunning) {
-      interval = setInterval(() => {
-        setStopwatchSeconds(prev => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isStopwatchRunning]);
 
   const formatTimer = (seconds) => {
     const h = Math.floor(seconds / 3600);
@@ -1534,11 +1495,20 @@ const handleDropToMove = async (e) => {
   useEffect(() => {
     // Initial fetch
     handleWeatherFetch();
-    
+
     // Set up interval for background updates (10 mins)
     const interval = setInterval(handleWeatherFetch, 600000);
-    
+
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (window.electronAPI?.onDragFinished) {
+      window.electronAPI.onDragFinished(() => {
+        setIsDraggingOut(false);
+        isDraggingOutRef.current = false;
+      });
+    }
   }, []);
 
   // Listen for storage events (including location changes) specifically to re-fetch weather
@@ -1608,10 +1578,10 @@ const handleDropToMove = async (e) => {
   useEffect(() => {
     // Immediate initial fetch
     getClipboard();
-    
+
     // Set up interval (5s)
     const interval = setInterval(getClipboard, 5000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -1630,10 +1600,10 @@ const handleDropToMove = async (e) => {
 
     // Immediate initial fetch
     fetchBluetooth();
-    
+
     // Set up interval (5s)
     const interval = setInterval(fetchBluetooth, 5000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -1680,7 +1650,7 @@ const handleDropToMove = async (e) => {
   // Keyboard Shortcuts and Navigation
   // Auto-revert to main view after inactivity
   useEffect(() => {
-    if (mode === "still") return; 
+    if (mode === "still") return;
 
     if (!autoRevertTime || autoRevertTime < 1000) return;
 
@@ -1729,54 +1699,54 @@ const handleDropToMove = async (e) => {
 
       setPrevView(view);
 
-    // Navigation Logic: Use layoutOrder.pages for horizontal navigation
-    const currentPageIndex = layoutOrder.pages.indexOf(view);
-    const getNextPage = (direction) => {
-      const len = layoutOrder.pages.length;
-      let nextIdx = currentPageIndex + direction;
-      if (infiniteScroll) {
-        nextIdx = (nextIdx + len) % len;
-      } else {
-        nextIdx = Math.max(0, Math.min(len - 1, nextIdx));
-      }
-      return layoutOrder.pages[nextIdx];
-    };
+      // Navigation Logic: Use layoutOrder.pages for horizontal navigation
+      const currentPageIndex = layoutOrder.pages.indexOf(view);
+      const getNextPage = (direction) => {
+        const len = layoutOrder.pages.length;
+        let nextIdx = currentPageIndex + direction;
+        if (infiniteScroll) {
+          nextIdx = (nextIdx + len) % len;
+        } else {
+          nextIdx = Math.max(0, Math.min(len - 1, nextIdx));
+        }
+        return layoutOrder.pages[nextIdx];
+      };
 
-    if (currentPageIndex !== -1) {
-      if (e.key === 'ArrowLeft') setView(getNextPage(-1));
-      if (e.key === 'ArrowRight') setView(getNextPage(1));
-      
-      if (view === 'home') {
-        if (e.key === 'ArrowUp') setView(layoutOrder.home[0]);
-        if (e.key === 'ArrowDown') setView(layoutOrder.home[1]);
-      } else if (view === 'todo') {
-        if (e.key === 'ArrowUp') setView(layoutOrder.todo[0] === 'calendar' ? 'todo_calendar' : 'todo_timer');
-        if (e.key === 'ArrowDown') setView(layoutOrder.todo[1] === 'calendar' ? 'todo_calendar' : 'todo_timer');
-      } else if (view === 'search') {
-        if (e.key === 'ArrowDown') setView('search_urls');
-      } else if (view === 'weather') {
-        if (e.key === 'ArrowDown') setView('weather_details');
+      if (currentPageIndex !== -1) {
+        if (e.key === 'ArrowLeft') setView(getNextPage(-1));
+        if (e.key === 'ArrowRight') setView(getNextPage(1));
+
+        if (view === 'home') {
+          if (e.key === 'ArrowUp') setView(layoutOrder.home[0]);
+          if (e.key === 'ArrowDown') setView(layoutOrder.home[1]);
+        } else if (view === 'todo') {
+          if (e.key === 'ArrowUp') setView(layoutOrder.todo[0] === 'calendar' ? 'todo_calendar' : 'todo_timer');
+          if (e.key === 'ArrowDown') setView(layoutOrder.todo[1] === 'calendar' ? 'todo_calendar' : 'todo_timer');
+        } else if (view === 'search') {
+          if (e.key === 'ArrowDown') setView('search_urls');
+        } else if (view === 'weather') {
+          if (e.key === 'ArrowDown') setView('weather_details');
+        }
+      } else {
+        // Handle sub-views
+        if (view === 'search_urls') {
+          if (e.key === 'ArrowUp') setView('search');
+        } else if (view === 'weather_details') {
+          if (e.key === 'ArrowUp') setView('weather');
+        } else if (view === 'todo_calendar') {
+          if (e.key === 'ArrowDown') setView('todo');
+          if (e.key === 'Escape') setView('todo');
+        } else if (view === 'todo_calendar_events') {
+          if (e.key === 'ArrowDown') setView('todo_calendar');
+          if (e.key === 'Escape') setView('todo_calendar');
+        } else if (view === 'todo_timer') {
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('todo');
+        } else if (view === 'dropbox') {
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('home');
+        } else if (view === 'clipboard') {
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('home');
+        }
       }
-    } else {
-      // Handle sub-views
-      if (view === 'search_urls') {
-        if (e.key === 'ArrowUp') setView('search');
-      } else if (view === 'weather_details') {
-        if (e.key === 'ArrowUp') setView('weather');
-      } else if (view === 'todo_calendar') {
-        if (e.key === 'ArrowDown') setView('todo');
-        if (e.key === 'Escape') setView('todo');
-      } else if (view === 'todo_calendar_events') {
-        if (e.key === 'ArrowDown') setView('todo_calendar');
-        if (e.key === 'Escape') setView('todo_calendar');
-      } else if (view === 'todo_timer') {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('todo');
-      } else if (view === 'dropbox') {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('home');
-      } else if (view === 'clipboard') {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('home');
-      }
-    }
 
       if (e.key === 'Escape') setView('home');
     };
@@ -1790,7 +1760,7 @@ const handleDropToMove = async (e) => {
   // Transition Logic based on dynamic layoutOrder
   const getHorizontalTransform = (targetView) => {
     if (view === targetView) return 'translate(0, 0)';
-    
+
     const pages = layoutOrder.pages;
     const currentIdx = pages.indexOf(view);
     const targetIdx = pages.indexOf(targetView);
@@ -1826,6 +1796,7 @@ const handleDropToMove = async (e) => {
       }}
       onMouseLeave={() => {
         isMouseOver.current = false;
+        if (isDraggingOutRef.current) return;
         if (window.electronAPI && !isMouseDown.current) {
           // Set to ignore so clicks fall through to desktop
           // forward: true ensures the window itself can still receive hover events 
@@ -1833,7 +1804,7 @@ const handleDropToMove = async (e) => {
         }
 
         // Auto-collapse logic maintained
-        if (view === 'dropbox') return;
+        if (view === 'dropbox' || isDraggingOutRef.current) return;
 
         if (standbyBorderEnabled) {
           setMode("quick");
@@ -1862,8 +1833,8 @@ const handleDropToMove = async (e) => {
         display: "flex",
         alignItems: "center",
         opacity: hideNotActiveIslandEnabled && mode === 'still' ? 0 : opacity,
-        backgroundImage: (view === 'weather' || view === 'weather_details') 
-          ? (getWeatherStyles().bgColor.includes('gradient') ? getWeatherStyles().bgColor : 'none') 
+        backgroundImage: (view === 'weather' || view === 'weather_details')
+          ? (getWeatherStyles().bgColor.includes('gradient') ? getWeatherStyles().bgColor : 'none')
           : `url('${bgImage}')`,
         backgroundRepeat: "no-repeat",
         backgroundPosition: "center",
@@ -1885,8 +1856,8 @@ const handleDropToMove = async (e) => {
                 ? 0
                 : 16,
         boxShadow: hideNotActiveIslandEnabled && mode === 'still' ? "none" : '2px 2px 30px rgba(0, 0, 0, 0.07)',
-        backgroundColor: (view === 'weather' || view === 'weather_details') 
-          ? (getWeatherStyles().bgColor.includes('gradient') ? 'transparent' : getWeatherStyles().bgColor) 
+        backgroundColor: (view === 'weather' || view === 'weather_details')
+          ? (getWeatherStyles().bgColor.includes('gradient') ? 'transparent' : getWeatherStyles().bgColor)
           : (hideNotActiveIslandEnabled && mode === 'still' ? "rgba(0,0,0,0)" : localStorage.getItem("bg-color")),
         color: hideNotActiveIslandEnabled && mode === 'still' ? "rgba(0,0,0,0)" : localStorage.getItem("text-color"),
         transition: "all 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
@@ -1895,7 +1866,7 @@ const handleDropToMove = async (e) => {
     >
       {/* Watch Live Bar (Timer/Stopwatch Running or Paused with value) */}
       {(isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) && mode !== 'large' && !ringingEvent && (
-        <div 
+        <div
           onMouseEnter={() => setIsWatchHovered(true)}
           onMouseLeave={() => setIsWatchHovered(false)}
           onClick={(e) => {
@@ -1917,57 +1888,35 @@ const handleDropToMove = async (e) => {
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 200,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: isWatchHovered ? 'transparent' : (localStorage.getItem("bg-color") || '#000'),
+            background: isWatchHovered ? 'transparent' : (showWatchInIdle ? (localStorage.getItem("bg-color") || '#000') : 'transparent'),
             pointerEvents: 'auto',
             borderRadius: 'inherit',
             transition: 'background 0.3s ease, all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
           }}
         >
           {/* Animated Border Progress (Outer Bar - Idle) - Only for Timer */}
-          {(isTimerRunning || timerSeconds > 0) && !isStopwatchRunning && !ringingEvent && (
-            <svg 
-              viewBox={`0 0 ${width} ${height}`}
-              style={{ 
-                position: 'absolute', 
-                inset: 0, 
-                width: '100%', 
-                height: '100%', 
-                pointerEvents: 'none',
-                opacity: !isWatchHovered ? 1 : 0,
-                transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                zIndex: 1
-              }}
-            >
-              <path
-                  d={`M ${width/2} 0 L ${width - height/2} 0 A ${height/2} ${height/2} 0 0 1 ${width} ${height/2} A ${height/2} ${height/2} 0 0 1 ${width - height/2} ${height} L ${width/2} ${height}`}
-                  fill="none"
-                  stroke="white"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  pathLength="50"
-                  strokeDasharray="50"
-                  strokeDashoffset={50 - (timerSeconds / (timerTotalSeconds || 1) * 50)}
-                  style={{ transition: 'stroke-dashoffset 1s linear' }}
-                />
-                <path
-                  d={`M ${width/2} 0 L ${height/2} 0 A ${height/2} ${height/2} 0 0 0 0 ${height/2} A ${height/2} ${height/2} 0 0 0 ${height/2} ${height} L ${width/2} ${height}`}
-                  fill="none"
-                  stroke="white"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  pathLength="50"
-                  strokeDasharray="50"
-                  strokeDashoffset={50 - (timerSeconds / (timerTotalSeconds || 1) * 50)}
-                  style={{ transition: 'stroke-dashoffset 1s linear' }}
-                />
-            </svg>
+          {(isTimerRunning || timerSeconds > 0) && !isStopwatchRunning && !ringingEvent && showTimerBorder && (showWatchInIdle || isWatchHovered) && (
+            <div style={{
+              position: 'absolute',
+              inset: '-1px',
+              borderRadius: 'inherit',
+              padding: '2.5px',
+              background: `conic-gradient(white ${(timerSeconds / (timerTotalSeconds || 1)) * 100}%, transparent 0)`,
+              WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+              WebkitMaskComposite: 'xor',
+              maskComposite: 'exclude',
+              pointerEvents: 'none',
+              opacity: !isWatchHovered ? 1 : 0,
+              transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+              zIndex: 1
+            }} />
           )}
 
           {/* Background Content when hovered */}
           <div style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '0 15px', pointerEvents: 'none', 
+            padding: '0 15px', pointerEvents: 'none',
             opacity: isWatchHovered ? 1 : 0,
             transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
             willChange: 'opacity'
@@ -1980,64 +1929,45 @@ const handleDropToMove = async (e) => {
           </div>
 
           {/* Main Watch Pill Content */}
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             style={{
-            width: '200px',
-            height: '32px',
-            background: (localStorage.getItem("bg-color") || '#000'),
-            borderRadius: '20px',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '0 12px',
-            transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s ease',
-            boxShadow: isWatchHovered ? '0 4px 12px rgba(0,0,0,0.3)' : 'none',
-            border: isWatchHovered ? '1px solid rgba(255,255,255,0.1)' : 'none',
-            position: 'relative',
-            zIndex: 2
-          }}>
+              width: '200px',
+              height: '32px',
+              background: (localStorage.getItem("bg-color") || '#000'),
+              borderRadius: '20px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '0 12px',
+              transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s ease',
+              boxShadow: isWatchHovered ? '0 4px 12px rgba(0,0,0,0.3)' : 'none',
+              border: isWatchHovered ? '1px solid rgba(255,255,255,0.1)' : 'none',
+              position: 'relative',
+              zIndex: 2,
+              opacity: (showWatchInIdle || isWatchHovered) ? 1 : 0,
+              pointerEvents: (showWatchInIdle || isWatchHovered) ? 'auto' : 'none',
+              transform: (showWatchInIdle || isWatchHovered) ? 'scale(1)' : 'scale(0.9)'
+            }}>
             {/* Animated Border Progress (Inner Pill - Hover) - Only for Timer */}
-            {(isTimerRunning || timerSeconds > 0) && !isStopwatchRunning && !ringingEvent && (
-              <svg 
-                viewBox="0 0 200 32"
-                style={{ 
-                  position: 'absolute', 
-                  inset: 0, 
-                  width: '100%', 
-                  height: '100%', 
-                  pointerEvents: 'none',
-                  opacity: isWatchHovered ? 1 : 0,
-                  transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                  zIndex: 1
-                }}
-              >
-                <path
-                    d="M 100 0 L 184 0 A 16 16 0 0 1 200 16 A 16 16 0 0 1 184 32 L 100 32"
-                    fill="none"
-                    stroke="white"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    pathLength="50"
-                    strokeDasharray="50"
-                    strokeDashoffset={50 - (timerSeconds / (timerTotalSeconds || 1) * 50)}
-                    style={{ transition: 'stroke-dashoffset 1s linear' }}
-                  />
-                  <path
-                    d="M 100 0 L 16 0 A 16 16 0 0 0 0 16 A 16 16 0 0 0 16 32 L 100 32"
-                    fill="none"
-                    stroke="white"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    pathLength="50"
-                    strokeDasharray="50"
-                    strokeDashoffset={50 - (timerSeconds / (timerTotalSeconds || 1) * 50)}
-                    style={{ transition: 'stroke-dashoffset 1s linear' }}
-                  />
-              </svg>
+            {(isTimerRunning || timerSeconds > 0) && !isStopwatchRunning && !ringingEvent && showTimerBorder && (
+              <div style={{
+                position: 'absolute',
+                inset: '-1px',
+                borderRadius: 'inherit',
+                padding: '2.5px',
+                background: `conic-gradient(white ${(timerSeconds / (timerTotalSeconds || 1)) * 100}%, transparent 0)`,
+                WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                WebkitMaskComposite: 'xor',
+                maskComposite: 'exclude',
+                pointerEvents: 'none',
+                opacity: isWatchHovered ? 1 : 0,
+                transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                zIndex: 1
+              }} />
             )}
             {/* Left: Time */}
-            <div style={{ 
-              fontSize: 13, 
-              fontWeight: 700, 
+            <div style={{
+              fontSize: 13,
+              fontWeight: 700,
               color: textColor,
               fontVariantNumeric: 'tabular-nums',
               letterSpacing: -0.5
@@ -2049,7 +1979,7 @@ const handleDropToMove = async (e) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {isWatchHovered ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, animation: 'fadeIn 0.2s ease-out' }}>
-                  <div 
+                  <div
                     onClick={() => {
                       if (isTimerRunning || (timerSeconds > 0 && !isStopwatchRunning)) {
                         setIsTimerRunning(!isTimerRunning);
@@ -2059,11 +1989,11 @@ const handleDropToMove = async (e) => {
                     }}
                     style={{ cursor: 'pointer' }}
                   >
-                    {(isTimerRunning || isStopwatchRunning) 
-                      ? <Pause size={14} color={textColor} /> 
+                    {(isTimerRunning || isStopwatchRunning)
+                      ? <Pause size={14} color={textColor} />
                       : <Play size={14} color={textColor} />}
                   </div>
-                  <div 
+                  <div
                     onClick={() => {
                       setIsTimerRunning(false);
                       setIsStopwatchRunning(false);
@@ -2087,7 +2017,7 @@ const handleDropToMove = async (e) => {
 
       {ringingEvent && (
         <div style={{
-          position: 'absolute', 
+          position: 'absolute',
           inset: mode === 'large' ? '12px auto auto 15px' : 0,
           width: mode === 'large' ? 'auto' : '100%',
           height: mode === 'large' ? '32px' : '100%',
@@ -2095,8 +2025,8 @@ const handleDropToMove = async (e) => {
           zIndex: 250,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           pointerEvents: 'auto',
-          background: mode === 'large' ? 'transparent' : (view === 'weather' || view === 'weather_details') 
-            ? (getWeatherStyles().bgColor.includes('gradient') ? getWeatherStyles().bgColor : localStorage.getItem("bg-color") || '#000') 
+          background: mode === 'large' ? 'transparent' : (view === 'weather' || view === 'weather_details')
+            ? (getWeatherStyles().bgColor.includes('gradient') ? getWeatherStyles().bgColor : localStorage.getItem("bg-color") || '#000')
             : (localStorage.getItem("bg-color") || '#000'),
           borderRadius: mode === 'large' ? '20px' : 'inherit',
         }}
@@ -2142,13 +2072,13 @@ const handleDropToMove = async (e) => {
               </div>
 
               {/* Center: Event Text */}
-              <div style={{ 
-                fontSize: mode === 'large' ? 11 : 13, 
-                fontWeight: 600, 
-                opacity: 0.9, 
-                overflow: 'hidden', 
-                textOverflow: 'ellipsis', 
-                whiteSpace: 'nowrap', 
+              <div style={{
+                fontSize: mode === 'large' ? 11 : 13,
+                fontWeight: 600,
+                opacity: 0.9,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
                 flex: 1,
                 color: textColor,
                 textAlign: 'center'
@@ -2373,27 +2303,27 @@ const handleDropToMove = async (e) => {
                 className="nav-dest-zone bottom-action"
                 onClick={() => {
                   if (view === 'home') {
-                  setPrevView(view);
-                  setView(layoutOrder.home[1]);
-                } else if (view === 'weather') {
-                  setPrevView(view);
-                  setView(layoutOrder.weather[1] === 'details' ? 'weather_details' : 'weather');
-                } else if (view === 'todo') {
-                  setPrevView(view);
-                  setView(layoutOrder.todo[1] === 'calendar' ? 'todo_calendar' : 'todo_timer');
-                } else if (view === 'search') {
-                  setPrevView(view);
-                  setView(layoutOrder.search[1] === 'urls' ? 'search_urls' : 'search');
-                } else if (view === 'weather_details') {
-                  setPrevView(view);
-                  setView('weather');
-                } else if (view === 'todo_timer' || view === 'todo_calendar') {
-                  setPrevView(view);
-                  setView('todo');
-                } else if (view === 'search_urls') {
-                  setPrevView(view);
-                  setView('search');
-                }
+                    setPrevView(view);
+                    setView(layoutOrder.home[1]);
+                  } else if (view === 'weather') {
+                    setPrevView(view);
+                    setView(layoutOrder.weather[1] === 'details' ? 'weather_details' : 'weather');
+                  } else if (view === 'todo') {
+                    setPrevView(view);
+                    setView(layoutOrder.todo[1] === 'calendar' ? 'todo_calendar' : 'todo_timer');
+                  } else if (view === 'search') {
+                    setPrevView(view);
+                    setView(layoutOrder.search[1] === 'urls' ? 'search_urls' : 'search');
+                  } else if (view === 'weather_details') {
+                    setPrevView(view);
+                    setView('weather');
+                  } else if (view === 'todo_timer' || view === 'todo_calendar') {
+                    setPrevView(view);
+                    setView('todo');
+                  } else if (view === 'search_urls') {
+                    setPrevView(view);
+                    setView('search');
+                  }
                 }}
                 onMouseEnter={() => setHoveredNav('bottom-action')}
                 onMouseLeave={() => setHoveredNav(null)}
@@ -2432,11 +2362,11 @@ const handleDropToMove = async (e) => {
                 opacity: hoveredNav === 'top-area' ? 0.8 : ((view === 'home' || view === 'todo') ? 0 : 0.3),
                 transition: 'opacity 0.2s ease'
               }}>
-              {view === 'home' ? (layoutOrder.home[0] === 'dropbox' ? <Box size={14} color={textColor} /> : <ClipboardIcon size={14} color={textColor} />) : 
-               view === 'todo' ? (layoutOrder.todo[0] === 'calendar' ? <Calendar size={14} color={textColor} /> : <TimerIcon size={14} color={textColor} />) :
-               view === 'weather' ? (layoutOrder.weather[0] === 'details' ? <Cloud size={14} color={textColor} /> : <Cloud size={14} color={textColor} />) :
-               view === 'search' ? (layoutOrder.search[0] === 'urls' ? <Search size={14} color={textColor} /> : <Search size={14} color={textColor} />) :
-               <ChevronUp size={16} color={textColor} />}
+              {view === 'home' ? (layoutOrder.home[0] === 'dropbox' ? <Box size={14} color={textColor} /> : <ClipboardIcon size={14} color={textColor} />) :
+                view === 'todo' ? (layoutOrder.todo[0] === 'calendar' ? <Calendar size={14} color={textColor} /> : <TimerIcon size={14} color={textColor} />) :
+                  view === 'weather' ? (layoutOrder.weather[0] === 'details' ? <Cloud size={14} color={textColor} /> : <Cloud size={14} color={textColor} />) :
+                    view === 'search' ? (layoutOrder.search[0] === 'urls' ? <Search size={14} color={textColor} /> : <Search size={14} color={textColor} />) :
+                      <ChevronUp size={16} color={textColor} />}
             </div>
           )}
           {/* Return Areas (Bottom) */}
@@ -2503,13 +2433,13 @@ const handleDropToMove = async (e) => {
             transform: view !== 'home' ? 'translateX(0)' : 'translateX(20px)',
             transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
             textAlign: 'right',
-            fontFamily: clockFont === 'w95' ? '"MS Sans Serif", "Microsoft Sans Serif", sans-serif' : 
-                       clockFont === 'OpenRunde' ? '"OpenRunde", sans-serif' : 
-                       clockFont
+            fontFamily: clockFont === 'w95' ? '"MS Sans Serif", "Microsoft Sans Serif", sans-serif' :
+              clockFont === 'OpenRunde' ? '"OpenRunde", sans-serif' :
+                clockFont
           }}>
             {clockStyle === 'analog' ? (
-               <AnalogClock size={20} color={textColor} style={analogStyle} />
-             ) : (
+              <AnalogClock size={20} color={textColor} style={analogStyle} />
+            ) : (
               <h1 style={{ fontSize: 12, margin: 0, lineHeight: 1, fontWeight: 600 }}>{time}</h1>
             )}
           </div>
@@ -2525,7 +2455,7 @@ const handleDropToMove = async (e) => {
           opacity: view === 'home' && mode === 'large' ? 1 : 0,
           transform: view === layoutOrder.home[0] ? 'translateY(100%)' :
             view === layoutOrder.home[1] ? 'translateY(-100%)' :
-            getHorizontalTransform('home'),
+              getHorizontalTransform('home'),
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           pointerEvents: view === 'home' && mode === 'large' ? 'auto' : 'none',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
@@ -2549,19 +2479,19 @@ const handleDropToMove = async (e) => {
           </div>
 
           {showInIslandSettings && (
-            <div 
+            <div
               ref={settingsRef}
               style={{
-              position: 'absolute',
-              inset: 0,
-              background: 'rgba(0,0,0,0.9)',
-              zIndex: 200,
-              padding: '40px 20px 20px 20px',
-              display: 'flex',
-              flexDirection: 'column',
-              backdropFilter: 'blur(20px)',
-              animation: 'appear 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-            }}>
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(0,0,0,0.9)',
+                zIndex: 200,
+                padding: '40px 20px 20px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                backdropFilter: 'blur(20px)',
+                animation: 'appear 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}>
               <div style={{
                 position: 'absolute',
                 top: 15,
@@ -2630,57 +2560,89 @@ const handleDropToMove = async (e) => {
                     {/* Clock Font */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 13, fontWeight: 500 }}>Clock Font</span>
-                      <select
-                        value={clockFont}
-                        onChange={(e) => {
-                          setClockFont(e.target.value);
-                          localStorage.setItem("clock-font", e.target.value);
-                        }}
-                        style={{
-                          background: 'rgba(255,255,255,0.05)',
-                          border: 'none',
-                          color: 'white',
-                          padding: '4px 8px',
-                          borderRadius: 8,
-                          fontSize: 11,
-                          outline: 'none'
-                        }}
-                      >
-                        <option value="OpenRunde">OpenRunde</option>
-                        <option value="w95">Win95 (Original)</option>
-                        <option value="SF Pro Display">SF Pro</option>
-                        <option value="Segoe UI">Segoe UI</option>
-                        <option value="monospace">Monospace</option>
-                      </select>
+                      <div style={{ position: 'relative' }}>
+                        <select
+                          value={clockFont}
+                          onChange={(e) => {
+                            setClockFont(e.target.value);
+                            localStorage.setItem("clock-font", e.target.value);
+                          }}
+                          style={{
+                            appearance: 'none',
+                            background: 'rgba(255,255,255,0.08)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            color: 'white',
+                            padding: '6px 28px 6px 12px',
+                            borderRadius: 10,
+                            fontSize: 12,
+                            fontWeight: 500,
+                            outline: 'none',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            minWidth: '130px'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background = 'rgba(255,255,255,0.12)';
+                            e.target.style.borderColor = 'rgba(255,255,255,0.2)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = 'rgba(255,255,255,0.08)';
+                            e.target.style.borderColor = 'rgba(255,255,255,0.1)';
+                          }}
+                        >
+                          <option value="OpenRunde" style={{ background: '#1a1a1a' }}>OpenRunde</option>
+                          <option value="w95" style={{ background: '#1a1a1a' }}>Win95 (Original)</option>
+                          <option value="SF Pro Display" style={{ background: '#1a1a1a' }}>SF Pro</option>
+                          <option value="Segoe UI" style={{ background: '#1a1a1a' }}>Segoe UI</option>
+                          <option value="monospace" style={{ background: '#1a1a1a' }}>Monospace</option>
+                        </select>
+                        <ChevronDown size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', opacity: 0.5 }} />
+                      </div>
                     </div>
 
                     {/* Analog Style */}
                     {clockStyle === 'analog' && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 13, fontWeight: 500 }}>Analog Style</span>
-                        <select
-                          value={analogStyle}
-                          onChange={(e) => {
-                            setAnalogStyle(e.target.value);
-                            localStorage.setItem("analog-style", e.target.value);
-                          }}
-                          style={{
-                            background: 'rgba(255,255,255,0.05)',
-                            border: 'none',
-                            color: 'white',
-                            padding: '4px 8px',
-                            borderRadius: 8,
-                            fontSize: 11,
-                            outline: 'none'
-                          }}
-                        >
-                          <option value="simple">Simple</option>
-                          <option value="cyber">Cyber</option>
-                          <option value="minimalist">Minimalist</option>
-                          <option value="cool">Cool</option>
-                          <option value="retro">Retro</option>
-                          <option value="modern">Modern</option>
-                        </select>
+                        <div style={{ position: 'relative' }}>
+                          <select
+                            value={analogStyle}
+                            onChange={(e) => {
+                              setAnalogStyle(e.target.value);
+                              localStorage.setItem("analog-style", e.target.value);
+                            }}
+                            style={{
+                              appearance: 'none',
+                              background: 'rgba(255,255,255,0.08)',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              color: 'white',
+                              padding: '6px 28px 6px 12px',
+                              borderRadius: 10,
+                              fontSize: 12,
+                              fontWeight: 500,
+                              outline: 'none',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              minWidth: '130px'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.background = 'rgba(255,255,255,0.12)';
+                              e.target.style.borderColor = 'rgba(255,255,255,0.2)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.background = 'rgba(255,255,255,0.08)';
+                              e.target.style.borderColor = 'rgba(255,255,255,0.1)';
+                            }}
+                          >
+                            <option value="simple" style={{ background: '#1a1a1a' }}>Simple</option>
+                            <option value="cyber" style={{ background: '#1a1a1a' }}>Cyber</option>
+                            <option value="minimalist" style={{ background: '#1a1a1a' }}>Minimalist</option>
+                            <option value="cool" style={{ background: '#1a1a1a' }}>Cool</option>
+                            <option value="retro" style={{ background: '#1a1a1a' }}>Retro</option>
+                            <option value="modern" style={{ background: '#1a1a1a' }}>Modern</option>
+                          </select>
+                          <ChevronDown size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', opacity: 0.5 }} />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2690,18 +2652,18 @@ const handleDropToMove = async (e) => {
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Layout & Reordering</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-                    
+
                     {/* Page Reordering */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div 
+                      <div
                         onClick={() => setExpandedSections(prev => ({ ...prev, pages: !prev.pages }))}
-                        style={{ 
-                          fontSize: 12, 
-                          fontWeight: 500, 
-                          opacity: 0.7, 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 6, 
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          opacity: 0.7,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
                           cursor: 'pointer',
                           userSelect: 'none'
                         }}
@@ -2714,7 +2676,7 @@ const handleDropToMove = async (e) => {
                           {/* Active Pages */}
                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <div style={{ fontSize: 10, opacity: 0.5, fontWeight: 600 }}>ACTIVE</div>
-                            <div 
+                            <div
                               onDragOver={(e) => e.preventDefault()}
                               onDrop={(e) => {
                                 const pageName = e.dataTransfer.getData("pageName");
@@ -2727,12 +2689,12 @@ const handleDropToMove = async (e) => {
                                   localStorage.setItem("island-layout-order", JSON.stringify(updated));
                                 }
                               }}
-                              style={{ 
-                                display: 'flex', 
-                                flexWrap: 'wrap', 
-                                gap: 8, 
-                                background: 'rgba(255,255,255,0.03)', 
-                                padding: 10, 
+                              style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 8,
+                                background: 'rgba(255,255,255,0.03)',
+                                padding: 10,
                                 borderRadius: 12,
                                 border: '1px solid rgba(255,255,255,0.05)',
                                 minHeight: '60px'
@@ -2752,7 +2714,7 @@ const handleDropToMove = async (e) => {
                                     const fromIdx = e.dataTransfer.getData("pageIdx");
                                     const fromType = e.dataTransfer.getData("fromType");
                                     const pageName = e.dataTransfer.getData("pageName");
-                                    
+
                                     if (fromType === "active") {
                                       const newPages = [...layoutOrder.pages];
                                       const [moved] = newPages.splice(parseInt(fromIdx), 1);
@@ -2792,7 +2754,7 @@ const handleDropToMove = async (e) => {
                           {/* Hidden Pages */}
                           <div style={{ width: '120px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <div style={{ fontSize: 10, opacity: 0.5, fontWeight: 600 }}>HIDDEN</div>
-                            <div 
+                            <div
                               onDragOver={(e) => e.preventDefault()}
                               onDrop={(e) => {
                                 const pageName = e.dataTransfer.getData("pageName");
@@ -2800,23 +2762,23 @@ const handleDropToMove = async (e) => {
                                 if (fromType === "active") {
                                   // Don't allow hiding 'home' if it's the only page
                                   if (layoutOrder.pages.length <= 1) return;
-                                  
+
                                   const newPages = layoutOrder.pages.filter(p => p !== pageName);
                                   const newHidden = [...layoutOrder.hiddenPages, pageName];
                                   const updated = { ...layoutOrder, pages: newPages, hiddenPages: newHidden };
                                   setLayoutOrder(updated);
                                   localStorage.setItem("island-layout-order", JSON.stringify(updated));
-                                  
+
                                   // If hiding current view, go back to home
                                   if (view === pageName) setView('home');
                                 }
                               }}
-                              style={{ 
-                                display: 'flex', 
+                              style={{
+                                display: 'flex',
                                 flexDirection: 'column',
-                                gap: 6, 
-                                background: 'rgba(255,255,255,0.02)', 
-                                padding: 8, 
+                                gap: 6,
+                                background: 'rgba(255,255,255,0.02)',
+                                padding: 8,
                                 borderRadius: 12,
                                 border: '1px dashed rgba(255,255,255,0.1)',
                                 minHeight: '60px'
@@ -2859,15 +2821,15 @@ const handleDropToMove = async (e) => {
 
                     {/* Home Layout */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div 
+                      <div
                         onClick={() => setExpandedSections(prev => ({ ...prev, home: !prev.home }))}
-                        style={{ 
-                          fontSize: 12, 
-                          fontWeight: 500, 
-                          opacity: 0.7, 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 6, 
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          opacity: 0.7,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
                           cursor: 'pointer',
                           userSelect: 'none'
                         }}
@@ -2876,12 +2838,12 @@ const handleDropToMove = async (e) => {
                         Home Tiles (Top / Bottom)
                       </div>
                       {expandedSections.home && (
-                        <div style={{ 
-                          display: 'flex', 
-                          flexDirection: 'column', 
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
                           gap: 8,
-                          background: 'rgba(255,255,255,0.03)', 
-                          padding: 10, 
+                          background: 'rgba(255,255,255,0.03)',
+                          padding: 10,
                           borderRadius: 12,
                           border: '1px solid rgba(255,255,255,0.05)'
                         }}>
@@ -2924,15 +2886,15 @@ const handleDropToMove = async (e) => {
 
                     {/* Weather Layout */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div 
+                      <div
                         onClick={() => setExpandedSections(prev => ({ ...prev, weather: !prev.weather }))}
-                        style={{ 
-                          fontSize: 12, 
-                          fontWeight: 500, 
-                          opacity: 0.7, 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 6, 
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          opacity: 0.7,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
                           cursor: 'pointer',
                           userSelect: 'none'
                         }}
@@ -2941,12 +2903,12 @@ const handleDropToMove = async (e) => {
                         Weather Tiles (Top / Bottom)
                       </div>
                       {expandedSections.weather && (
-                        <div style={{ 
-                          display: 'flex', 
-                          flexDirection: 'column', 
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
                           gap: 8,
-                          background: 'rgba(255,255,255,0.03)', 
-                          padding: 10, 
+                          background: 'rgba(255,255,255,0.03)',
+                          padding: 10,
                           borderRadius: 12,
                           border: '1px solid rgba(255,255,255,0.05)'
                         }}>
@@ -2989,15 +2951,15 @@ const handleDropToMove = async (e) => {
 
                     {/* Search Layout */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div 
+                      <div
                         onClick={() => setExpandedSections(prev => ({ ...prev, search: !prev.search }))}
-                        style={{ 
-                          fontSize: 12, 
-                          fontWeight: 500, 
-                          opacity: 0.7, 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 6, 
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          opacity: 0.7,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
                           cursor: 'pointer',
                           userSelect: 'none'
                         }}
@@ -3006,12 +2968,12 @@ const handleDropToMove = async (e) => {
                         Search Tiles (Top / Bottom)
                       </div>
                       {expandedSections.search && (
-                        <div style={{ 
-                          display: 'flex', 
-                          flexDirection: 'column', 
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
                           gap: 8,
-                          background: 'rgba(255,255,255,0.03)', 
-                          padding: 10, 
+                          background: 'rgba(255,255,255,0.03)',
+                          padding: 10,
                           borderRadius: 12,
                           border: '1px solid rgba(255,255,255,0.05)'
                         }}>
@@ -3054,15 +3016,15 @@ const handleDropToMove = async (e) => {
 
                     {/* Todo Layout */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div 
+                      <div
                         onClick={() => setExpandedSections(prev => ({ ...prev, todo: !prev.todo }))}
-                        style={{ 
-                          fontSize: 12, 
-                          fontWeight: 500, 
-                          opacity: 0.7, 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 6, 
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          opacity: 0.7,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
                           cursor: 'pointer',
                           userSelect: 'none'
                         }}
@@ -3071,12 +3033,12 @@ const handleDropToMove = async (e) => {
                         Todo Tiles (Top / Bottom)
                       </div>
                       {expandedSections.todo && (
-                        <div style={{ 
-                          display: 'flex', 
-                          flexDirection: 'column', 
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
                           gap: 8,
-                          background: 'rgba(255,255,255,0.03)', 
-                          padding: 10, 
+                          background: 'rgba(255,255,255,0.03)',
+                          padding: 10,
                           borderRadius: 12,
                           border: '1px solid rgba(255,255,255,0.05)'
                         }}>
@@ -3280,43 +3242,65 @@ const handleDropToMove = async (e) => {
                     {/* Scroll Action */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 13, fontWeight: 500 }}>Scroll Action</span>
-                      <select
-                        value={scrollAction}
-                        onChange={(e) => {
-                          setScrollAction(e.target.value);
-                          localStorage.setItem("scroll-action", e.target.value);
-                        }}
-                        style={{
-                          background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white',
-                          padding: '4px 8px', borderRadius: 8, fontSize: 11, outline: 'none'
-                        }}
-                      >
-                        <option value="volume">Volume</option>
-                        <option value="brightness">Brightness</option>
-                      </select>
+                      <div style={{ position: 'relative' }}>
+                        <select
+                          value={scrollAction}
+                          onChange={(e) => {
+                            setScrollAction(e.target.value);
+                            localStorage.setItem("scroll-action", e.target.value);
+                          }}
+                          style={{
+                            appearance: 'none',
+                            background: 'rgba(255,255,255,0.08)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            color: 'white',
+                            padding: '4px 24px 4px 10px',
+                            borderRadius: 8,
+                            fontSize: 11,
+                            outline: 'none',
+                            cursor: 'pointer',
+                            minWidth: '100px'
+                          }}
+                        >
+                          <option value="volume" style={{ background: '#1a1a1a' }}>Volume</option>
+                          <option value="brightness" style={{ background: '#1a1a1a' }}>Brightness</option>
+                        </select>
+                        <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', opacity: 0.5 }} />
+                      </div>
                     </div>
 
                     {/* AI Model Selection */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 13, fontWeight: 500 }}>AI Model</span>
-                        <select
-                          value={aiModel}
-                          onChange={(e) => {
-                            setAiModel(e.target.value);
-                            localStorage.setItem("ai-model", e.target.value);
-                          }}
-                          style={{
-                            background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white',
-                            padding: '4px 8px', borderRadius: 8, fontSize: 11, outline: 'none'
-                          }}
-                        >
-                          <option value="openai/gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                          <option value="openai/gpt-4">GPT-4</option>
-                          <option value="anthropic/claude-2">Claude 2</option>
-                          <option value="google/palm-2-chat-bison">PaLM 2</option>
-                          <option value="custom">Custom (OpenRouter)</option>
-                        </select>
+                        <div style={{ position: 'relative' }}>
+                          <select
+                            value={aiModel}
+                            onChange={(e) => {
+                              setAiModel(e.target.value);
+                              localStorage.setItem("ai-model", e.target.value);
+                            }}
+                            style={{
+                              appearance: 'none',
+                              background: 'rgba(255,255,255,0.08)',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              color: 'white',
+                              padding: '4px 24px 4px 10px',
+                              borderRadius: 8,
+                              fontSize: 11,
+                              outline: 'none',
+                              cursor: 'pointer',
+                              minWidth: '120px'
+                            }}
+                          >
+                            <option value="openai/gpt-3.5-turbo" style={{ background: '#1a1a1a' }}>GPT-3.5 Turbo</option>
+                            <option value="openai/gpt-4" style={{ background: '#1a1a1a' }}>GPT-4</option>
+                            <option value="anthropic/claude-2" style={{ background: '#1a1a1a' }}>Claude 2</option>
+                            <option value="google/palm-2-chat-bison" style={{ background: '#1a1a1a' }}>PaLM 2</option>
+                            <option value="custom" style={{ background: '#1a1a1a' }}>Custom (OpenRouter)</option>
+                          </select>
+                          <ChevronDown size={12} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', opacity: 0.5 }} />
+                        </div>
                       </div>
                       {aiModel === 'custom' && (
                         <input
@@ -3399,22 +3383,33 @@ const handleDropToMove = async (e) => {
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: 12, opacity: 0.7 }}>Border Style</span>
-                          <select
-                            value={islandBorderStyle}
-                            onChange={(e) => {
-                              setIslandBorderStyle(e.target.value);
-                              localStorage.setItem("island-border-style", e.target.value);
-                            }}
-                            style={{
-                              background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white',
-                              padding: '2px 6px', borderRadius: 6, fontSize: 10, outline: 'none'
-                            }}
-                          >
-                            <option value="solid">Solid</option>
-                            <option value="dashed">Dashed</option>
-                            <option value="dotted">Dotted</option>
-                            <option value="double">Double</option>
-                          </select>
+                          <div style={{ position: 'relative' }}>
+                            <select
+                              value={islandBorderStyle}
+                              onChange={(e) => {
+                                setIslandBorderStyle(e.target.value);
+                                localStorage.setItem("island-border-style", e.target.value);
+                              }}
+                              style={{
+                                appearance: 'none',
+                                background: 'rgba(255,255,255,0.08)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                color: 'white',
+                                padding: '2px 20px 2px 8px',
+                                borderRadius: 6,
+                                fontSize: 10,
+                                outline: 'none',
+                                cursor: 'pointer',
+                                minWidth: '80px'
+                              }}
+                            >
+                              <option value="solid" style={{ background: '#1a1a1a' }}>Solid</option>
+                              <option value="dashed" style={{ background: '#1a1a1a' }}>Dashed</option>
+                              <option value="dotted" style={{ background: '#1a1a1a' }}>Dotted</option>
+                              <option value="double" style={{ background: '#1a1a1a' }}>Double</option>
+                            </select>
+                            <ChevronDown size={10} style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', opacity: 0.5 }} />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -3646,9 +3641,9 @@ const handleDropToMove = async (e) => {
             textAlign: 'center',
             transformOrigin: 'center center',
             marginTop: 10,
-            fontFamily: clockFont === 'w95' ? '"MS Sans Serif", "Microsoft Sans Serif", sans-serif' : 
-                       clockFont === 'OpenRunde' ? '"OpenRunde", sans-serif' : 
-                       clockFont
+            fontFamily: clockFont === 'w95' ? '"MS Sans Serif", "Microsoft Sans Serif", sans-serif' :
+              clockFont === 'OpenRunde' ? '"OpenRunde", sans-serif' :
+                clockFont
           }}>
             {clockStyle === 'analog' ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15 }}>
@@ -3767,10 +3762,10 @@ const handleDropToMove = async (e) => {
                 <span style={{ fontSize: 9, opacity: 0.5, fontWeight: 800 }}>FEELS LIKE</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-                <div style={{ 
-                  fontSize: 10, fontWeight: 900, width: 22, height: 22, borderRadius: '50%', 
-                  border: `1.5px solid ${textColor}`, display: 'flex', alignItems: 'center', 
-                  justifyContent: 'center', opacity: 0.7 
+                <div style={{
+                  fontSize: 10, fontWeight: 900, width: 22, height: 22, borderRadius: '50%',
+                  border: `1.5px solid ${textColor}`, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', opacity: 0.7
                 }}>AQI</div>
                 <span style={{ fontSize: 12, fontWeight: 700 }}>{Math.round(weatherDetails.air_quality?.["us-epa-index"] || 0)}</span>
                 <span style={{ fontSize: 9, opacity: 0.5, fontWeight: 800 }}>AIR QUALITY</span>
@@ -3784,7 +3779,7 @@ const handleDropToMove = async (e) => {
           )}
         </div>
 
-          {/* Search View */}
+        {/* Search View */}
         <div style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'search' && mode === 'large') ? 1 : 0,
@@ -3858,7 +3853,7 @@ const handleDropToMove = async (e) => {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {result.icon ? (
-                      <img 
+                      <img
                         src={result.icon.startsWith('http') ? result.icon : `https://duckduckgo.com${result.icon}`}
                         alt="icon"
                         style={{ width: 16, height: 16, borderRadius: 4, objectFit: 'contain' }}
@@ -3868,8 +3863,8 @@ const handleDropToMove = async (e) => {
                         }}
                       />
                     ) : result.url ? (
-                      <img 
-                        src={`https://www.google.com/s2/favicons?sz=32&domain=${new URL(result.url).hostname}`} 
+                      <img
+                        src={`https://www.google.com/s2/favicons?sz=32&domain=${new URL(result.url).hostname}`}
                         alt="icon"
                         style={{ width: 16, height: 16, borderRadius: 4 }}
                         onError={(e) => {
@@ -3911,7 +3906,7 @@ const handleDropToMove = async (e) => {
               const iconUrl = `https://www.google.com/s2/favicons?sz=64&domain=${domain}`;
               return (
                 <div key={idx} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-                  <div 
+                  <div
                     onClick={() => {
                       if (isEditingUrls) {
                         setEditingUrlIndex(idx);
@@ -3922,7 +3917,7 @@ const handleDropToMove = async (e) => {
                         setView('home');
                       }
                     }}
-                    style={{ 
+                    style={{
                       width: 45, height: 45, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
                       background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                       transition: 'all 0.2s ease',
@@ -3932,7 +3927,7 @@ const handleDropToMove = async (e) => {
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                   >
                     <img src={iconUrl} alt={domain} style={{ width: '60%', height: '60%', objectFit: 'contain', opacity: isEditingUrls ? 0.5 : 1 }} />
-                    
+
                     {isEditingUrls && (
                       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
                         <Edit2 size={14} color="white" />
@@ -3941,14 +3936,14 @@ const handleDropToMove = async (e) => {
                   </div>
 
                   {isEditingUrls && (
-                    <div 
+                    <div
                       onClick={(e) => {
                         e.stopPropagation();
                         const newUrls = pinnedUrls.filter((_, i) => i !== idx);
                         setPinnedUrls(newUrls);
                         localStorage.setItem("pinned-urls", JSON.stringify(newUrls));
                       }}
-                      style={{ 
+                      style={{
                         position: 'absolute', top: -5, right: -5, width: 18, height: 18, borderRadius: '50%',
                         background: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         cursor: 'pointer', zIndex: 10, border: '2px solid rgba(0,0,0,0.5)'
@@ -3961,9 +3956,9 @@ const handleDropToMove = async (e) => {
               );
             })}
             {pinnedUrls.length < 9 && (
-              <div 
+              <div
                 onClick={() => setShowAddUrlModal(true)}
-                style={{ 
+                style={{
                   width: 45, height: 45, borderRadius: 12, cursor: 'pointer',
                   background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'all 0.2s ease', border: '1px dashed rgba(255,255,255,0.2)'
@@ -3983,9 +3978,9 @@ const handleDropToMove = async (e) => {
           </div>
 
           {/* Edit Toggle Button */}
-          <div 
+          <div
             onClick={() => setIsEditingUrls(!isEditingUrls)}
-            style={{ 
+            style={{
               position: 'absolute', bottom: 15, right: 15, width: 24, height: 24, borderRadius: 6,
               background: isEditingUrls ? 'rgba(79, 172, 254, 0.2)' : 'rgba(255,255,255,0.05)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -4014,7 +4009,7 @@ const handleDropToMove = async (e) => {
               <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5, textAlign: 'center' }}>
                 {editingUrlIndex !== null ? 'EDIT QUICK APP' : 'ADD QUICK APP'}
               </div>
-              
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <input
                   type="text"
@@ -4034,12 +4029,12 @@ const handleDropToMove = async (e) => {
               </div>
 
               <div style={{ display: 'flex', gap: 10 }}>
-                <div 
+                <div
                   onClick={() => {
                     let finalUrl = newUrlData.url.trim();
                     if (finalUrl) {
                       if (!/^https?:\/\//i.test(finalUrl)) finalUrl = 'https://' + finalUrl;
-                      
+
                       let newUrls;
                       if (editingUrlIndex !== null) {
                         newUrls = [...pinnedUrls];
@@ -4047,7 +4042,7 @@ const handleDropToMove = async (e) => {
                       } else {
                         newUrls = [...pinnedUrls, finalUrl];
                       }
-                      
+
                       setPinnedUrls(newUrls);
                       localStorage.setItem("pinned-urls", JSON.stringify(newUrls));
                     }
@@ -4059,7 +4054,7 @@ const handleDropToMove = async (e) => {
                 >
                   SAVE
                 </div>
-                <div 
+                <div
                   onClick={() => {
                     setShowAddUrlModal(false);
                     setNewUrlData({ name: '', url: '' });
@@ -4085,61 +4080,61 @@ const handleDropToMove = async (e) => {
         }}>
           {/* Header */}
           <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
-             <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>ASK AI</div>
-             <div onClick={() => setShowHistory(!showHistory)} style={{ cursor: 'pointer', opacity: 0.7, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <History size={14} color={textColor} />
-             </div>
+            <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>ASK AI</div>
+            <div onClick={() => setShowHistory(!showHistory)} style={{ cursor: 'pointer', opacity: 0.7, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <History size={14} color={textColor} />
+            </div>
           </div>
 
           {/* History Overlay */}
           {showHistory && (
-             <div style={{
-               position: 'absolute', inset: '40px 10px 10px 10px', background: 'rgba(0,0,0,0.85)', borderRadius: 15, zIndex: 20,
-               display: 'flex', flexDirection: 'column', overflow: 'hidden', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)',
-               boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
-             }}>
-               {/* Fixed History Header */}
-               <div style={{ 
-                 display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                 padding: '12px 15px', borderBottom: '1px solid rgba(255,255,255,0.1)',
-                 background: 'rgba(255,255,255,0.05)'
-               }}>
-                 <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.7 }}>HISTORY</span>
-                 <div style={{ display: 'flex', gap: 15, alignItems: 'center' }}>
-                    <div 
-                      onClick={handleNewChat}
-                      style={{ 
-                        fontSize: 10, fontWeight: 700, cursor: 'pointer', background: 'rgba(255,255,255,0.1)', 
-                        padding: '3px 8px', borderRadius: 8, transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                    >
-                      NEW CHAT
+            <div style={{
+              position: 'absolute', inset: '40px 10px 10px 10px', background: 'rgba(0,0,0,0.85)', borderRadius: 15, zIndex: 20,
+              display: 'flex', flexDirection: 'column', overflow: 'hidden', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
+            }}>
+              {/* Fixed History Header */}
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '12px 15px', borderBottom: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(255,255,255,0.05)'
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.7 }}>HISTORY</span>
+                <div style={{ display: 'flex', gap: 15, alignItems: 'center' }}>
+                  <div
+                    onClick={handleNewChat}
+                    style={{
+                      fontSize: 10, fontWeight: 700, cursor: 'pointer', background: 'rgba(255,255,255,0.1)',
+                      padding: '3px 8px', borderRadius: 8, transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  >
+                    NEW CHAT
+                  </div>
+                  <Trash2 size={12} color="#ef4444" style={{ cursor: 'pointer' }} onClick={handleClearHistory} />
+                  <X size={12} style={{ cursor: 'pointer' }} onClick={() => setShowHistory(false)} />
+                </div>
+              </div>
+
+              {/* Scrollable History List */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: 10 }}>
+                {chatHistory.length === 0 ? (
+                  <div style={{ fontSize: 12, opacity: 0.5, textAlign: 'center', marginTop: 20 }}>No history</div>
+                ) : (
+                  chatHistory.slice().reverse().map((chat) => (
+                    <div key={chat.id} style={{
+                      marginBottom: 12, fontSize: 12, padding: 10, borderRadius: 10,
+                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)'
+                    }}>
+                      <div style={{ opacity: 0.5, fontSize: 10, marginBottom: 4 }}>{new Date(chat.timestamp).toLocaleString()}</div>
+                      <div style={{ fontWeight: 600, marginBottom: 2 }}>Q: {chat.question}</div>
+                      <div style={{ opacity: 0.8 }}>A: {chat.answer.substring(0, 100)}...</div>
                     </div>
-                    <Trash2 size={12} color="#ef4444" style={{ cursor: 'pointer' }} onClick={handleClearHistory} />
-                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setShowHistory(false)} />
-                 </div>
-               </div>
-               
-               {/* Scrollable History List */}
-               <div style={{ flex: 1, overflowY: 'auto', padding: 10 }}>
-                 {chatHistory.length === 0 ? (
-                   <div style={{ fontSize: 12, opacity: 0.5, textAlign: 'center', marginTop: 20 }}>No history</div>
-                 ) : (
-                   chatHistory.slice().reverse().map((chat) => (
-                     <div key={chat.id} style={{ 
-                       marginBottom: 12, fontSize: 12, padding: 10, borderRadius: 10, 
-                       background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)'
-                     }}>
-                       <div style={{ opacity: 0.5, fontSize: 10, marginBottom: 4 }}>{new Date(chat.timestamp).toLocaleString()}</div>
-                       <div style={{ fontWeight: 600, marginBottom: 2 }}>Q: {chat.question}</div>
-                       <div style={{ opacity: 0.8 }}>A: {chat.answer.substring(0, 100)}...</div>
-                     </div>
-                   ))
-                 )}
-               </div>
-             </div>
+                  ))
+                )}
+              </div>
+            </div>
           )}
 
           {/* Messages Area */}
@@ -4204,24 +4199,24 @@ const handleDropToMove = async (e) => {
               <div style={{ textAlign: 'center', opacity: 0.3, fontSize: 13, marginTop: 'auto', marginBottom: 'auto' }}>No tasks yet</div>
             ) : (
               todos.map(todo => (
-                <div key={todo.id} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 12, 
-                  padding: '10px 14px', 
-                  background: todo.completed ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.06)', 
-                  borderRadius: 14, 
+                <div key={todo.id} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '10px 14px',
+                  background: todo.completed ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.06)',
+                  borderRadius: 14,
                   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   border: '1px solid rgba(255,255,255,0.05)',
                   boxShadow: todo.completed ? 'none' : '0 4px 12px rgba(0,0,0,0.1)'
                 }}>
                   {/* Custom Checkbox */}
-                  <div 
+                  <div
                     onClick={() => toggleTodo(todo.id)}
-                    style={{ 
-                      width: 20, 
-                      height: 20, 
-                      borderRadius: 6, 
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 6,
                       border: `2px solid ${todo.completed ? '#ffffff' : 'rgba(255,255,255,0.2)'}`,
                       background: todo.completed ? 'rgba(255,255,255,0.9)' : 'transparent',
                       cursor: 'pointer',
@@ -4235,21 +4230,21 @@ const handleDropToMove = async (e) => {
                     {todo.completed && <Check size={12} color="black" />}
                   </div>
 
-                  <span style={{ 
-                    flex: 1, 
-                    fontSize: 14, 
+                  <span style={{
+                    flex: 1,
+                    fontSize: 14,
                     fontWeight: 500,
-                    textDecoration: todo.completed ? 'line-through' : 'none', 
-                    opacity: todo.completed ? 0.4 : 0.9, 
+                    textDecoration: todo.completed ? 'line-through' : 'none',
+                    opacity: todo.completed ? 0.4 : 0.9,
                     color: textColor,
                     transition: 'all 0.3s ease',
-                    whiteSpace: 'nowrap', 
-                    overflow: 'hidden', 
-                    textOverflow: 'ellipsis' 
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
                   }}>
                     {todo.text}
                   </span>
-                  
+
                   <Trash2
                     size={14}
                     color="#ef4444"
@@ -4433,10 +4428,10 @@ const handleDropToMove = async (e) => {
                               placeholder="HH:MM"
                               style={{ width: 55, padding: '6px 5px', borderRadius: 10, border: 'none', outline: 'none', background: 'transparent', color: 'white', fontSize: 13, textAlign: 'center' }}
                             />
-                            <div 
+                            <div
                               onClick={() => setEditingCalendarEventAmPm(prev => prev === 'AM' ? 'PM' : 'AM')}
-                              style={{ 
-                                padding: '3px 6px', borderRadius: 10, background: 'rgba(255,255,255,0.1)', 
+                              style={{
+                                padding: '3px 6px', borderRadius: 10, background: 'rgba(255,255,255,0.1)',
                                 fontSize: 9, fontWeight: 900, cursor: 'pointer', color: 'white',
                                 userSelect: 'none'
                               }}
@@ -4531,10 +4526,10 @@ const handleDropToMove = async (e) => {
                 placeholder="HH:MM"
                 style={{ width: 60, padding: '8px 8px', borderRadius: 16, border: 'none', outline: 'none', background: 'transparent', color: 'white', fontSize: 13, textAlign: 'center' }}
               />
-              <div 
+              <div
                 onClick={() => setCalendarEventAmPm(prev => prev === 'AM' ? 'PM' : 'AM')}
-                style={{ 
-                  padding: '4px 8px', borderRadius: 16, background: 'rgba(255,255,255,0.1)', 
+                style={{
+                  padding: '4px 8px', borderRadius: 16, background: 'rgba(255,255,255,0.1)',
                   fontSize: 10, fontWeight: 900, cursor: 'pointer', color: 'white',
                   userSelect: 'none', transition: 'all 0.2s ease'
                 }}
@@ -4611,10 +4606,10 @@ const handleDropToMove = async (e) => {
                 TIMER
               </div>
             </div>
-            
+
             {watchMode === 'timer' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                <div 
+                <div
                   onClick={() => {
                     setTimerSeconds(prev => {
                       const next = Math.max(0, prev - 60);
@@ -4628,12 +4623,12 @@ const handleDropToMove = async (e) => {
                 >
                   <ChevronDown size={20} color={textColor} />
                 </div>
-                
+
                 <div style={{ fontSize: 42, fontWeight: 700, letterSpacing: -1, fontVariantNumeric: 'tabular-nums' }}>
                   {formatTimer(timerSeconds)}
                 </div>
 
-                <div 
+                <div
                   onClick={() => {
                     setTimerSeconds(prev => {
                       const next = prev + 60;
@@ -4655,7 +4650,7 @@ const handleDropToMove = async (e) => {
             )}
 
             <div style={{ display: 'flex', gap: 20 }}>
-              <div 
+              <div
                 onClick={() => {
                   if (watchMode === 'timer') {
                     if (!isTimerRunning && timerSeconds > 0) setTimerTotalSeconds(timerSeconds);
@@ -4664,7 +4659,7 @@ const handleDropToMove = async (e) => {
                     setIsStopwatchRunning(!isStopwatchRunning);
                   }
                 }}
-                style={{ 
+                style={{
                   width: 44, height: 44, borderRadius: '50%', background: (watchMode === 'timer' ? isTimerRunning : isStopwatchRunning) ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255, 255, 255, 0.10)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s ease'
                 }}
@@ -4675,8 +4670,8 @@ const handleDropToMove = async (e) => {
                   ? <Pause size={20} color="#ef4444" />
                   : <Play size={20} color="#ffffff" style={{ transform: 'translateX(1px)' }} />}
               </div>
-              
-              <div 
+
+              <div
                 onClick={() => {
                   if (watchMode === 'timer') {
                     setIsTimerRunning(false);
@@ -4686,7 +4681,7 @@ const handleDropToMove = async (e) => {
                     setStopwatchSeconds(0);
                   }
                 }}
-                style={{ 
+                style={{
                   width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.1)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s ease'
                 }}
@@ -4735,9 +4730,9 @@ const handleDropToMove = async (e) => {
                 {tempFiles.filter(f => f.type === 'copy').map((file, idx) => (
                   <div key={idx} draggable onDragStart={(e) => handleDragStartFromPaste(e, file)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', marginBottom: 4, cursor: 'grab', fontSize: 10, position: 'relative' }}>
                     <div style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.name}</div>
-                    <X 
-                      size={10} 
-                      style={{ cursor: 'pointer', opacity: 0.5 }} 
+                    <X
+                      size={10}
+                      style={{ cursor: 'pointer', opacity: 0.5 }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleClear(file);
@@ -4755,10 +4750,13 @@ const handleDropToMove = async (e) => {
                 e.preventDefault();
                 setIsDraggingOver(null);
                 const files = e.dataTransfer.files;
-                if (files.length > 0 && window.electronAPI?.moveToTemp) {
-                  const paths = Array.from(files).map(f => window.electronAPI.getPathForFile(f));
-                  await window.electronAPI.moveToTemp(paths);
-                  refreshTempFiles();
+                if (files.length > 0) {
+                  const newFiles = Array.from(files).map(f => ({
+                    name: f.name,
+                    path: window.electronAPI.getPathForFile(f),
+                    type: 'move'
+                  }));
+                  setTempFiles(prev => [...prev, ...newFiles]);
                 }
               }}
               style={{ flex: 1, border: `2px dashed ${isDraggingOver === 'move' ? '#fbbf24' : 'rgba(255,255,255,0.15)'}`, borderRadius: 15, display: 'flex', flexDirection: 'column', background: isDraggingOver === 'move' ? 'rgba(251, 191, 36, 0.05)' : 'rgba(255,255,255,0.02)', transition: 'all 0.2s ease', overflow: 'hidden' }}>
@@ -4767,9 +4765,9 @@ const handleDropToMove = async (e) => {
                 {tempFiles.filter(f => f.type === 'move').map((file, idx) => (
                   <div key={idx} draggable onDragStart={(e) => handleDragStartFromPaste(e, file)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', marginBottom: 4, cursor: 'grab', fontSize: 10, position: 'relative' }}>
                     <div style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.name}</div>
-                    <X 
-                      size={10} 
-                      style={{ cursor: 'pointer', opacity: 0.5 }} 
+                    <X
+                      size={10}
+                      style={{ cursor: 'pointer', opacity: 0.5 }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleClear(file);
@@ -4801,12 +4799,12 @@ const handleDropToMove = async (e) => {
               <div style={{ textAlign: 'center', opacity: 0.3, fontSize: 12, marginTop: 'auto', marginBottom: 'auto' }}>Clipboard is empty</div>
             ) : (
               clipboardHistory.map((item, idx) => (
-                <div 
-                  key={idx} 
+                <div
+                  key={idx}
                   onClick={() => handleCopyFromHistory(item)}
                   className="clipboard-item"
-                  style={{ 
-                    padding: '10px', borderRadius: 12, background: 'rgba(255,255,255,0.05)', 
+                  style={{
+                    padding: '10px', borderRadius: 12, background: 'rgba(255,255,255,0.05)',
                     border: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer',
                     transition: 'all 0.2s ease', position: 'relative', overflow: 'hidden'
                   }}
@@ -4822,10 +4820,10 @@ const handleDropToMove = async (e) => {
                       {item.content}
                     </div>
                   ) : (
-                    <img 
-                      src={item.content} 
-                      alt="Clipboard item" 
-                      style={{ maxWidth: '100%', maxHeight: '100px', borderRadius: 8, display: 'block', margin: '0 auto' }} 
+                    <img
+                      src={item.content}
+                      alt="Clipboard item"
+                      style={{ maxWidth: '100%', maxHeight: '100px', borderRadius: 8, display: 'block', margin: '0 auto' }}
                     />
                   )}
                   <div style={{ fontSize: 8, opacity: 0.3, marginTop: 4, textAlign: 'right' }}>

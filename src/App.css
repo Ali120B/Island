@@ -177,16 +177,37 @@ button:active {
 }
 
 select {
+  appearance: none;
   cursor: pointer;
-  color: #FAFAFA;
-  background-color: rgb(32, 32, 32);
-  color: white;
+  color: #fff;
+  background-color: #1a1a1a;
   border-radius: 10px;
   outline: none;
-  border: 2px solid grey;
-  transition: .2s;
-  animation: cubic-bezier(0.165, 0.84, 0.44, 1) appear 1s forwards;
-  margin: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: all 0.2s ease;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+select:hover {
+  background-color: #242424;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+select:focus {
+  border-color: #4facfe;
+  box-shadow: 0 0 0 2px rgba(79, 172, 254, 0.2);
+}
+
+select option {
+  background-color: #1a1a1a;
+  color: #fff;
+  padding: 12px;
+}
+
+/* Ensure dark mode on Windows/Chrome for the dropdown menu */
+select, option {
+  color-scheme: dark;
 }
 
 .select-input {

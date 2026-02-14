@@ -26,12 +26,12 @@ const getIconPath = () => {
   try {
     const ext = 'png';
     const iconName = `icon.${ext}`;
-    
+
     // 1. Check packaged resources
     if (app.isPackaged) {
       const resPath = path.join(process.resourcesPath, iconName);
       if (fs.existsSync(resPath)) return resPath;
-      
+
       const assetsPath = path.join(process.resourcesPath, 'assets', 'icons', iconName);
       if (fs.existsSync(assetsPath)) return assetsPath;
     }
@@ -56,7 +56,7 @@ const getIconPath = () => {
     console.error('[Main] Error in getIconPath:', err);
   }
 
-  return undefined; 
+  return undefined;
 };
 
 const createWindow = () => {
@@ -190,7 +190,7 @@ app.whenReady().then(() => {
       // Fallback if no icon found
       trayIcon = nativeImage.createEmpty();
     }
-    
+
     const contextMenu = Menu.buildFromTemplate([
       {
         label: 'Show/Hide Island',
@@ -547,109 +547,8 @@ ipcMain.handle('write-files-to-clipboard', (event, filePaths) => {
   }
 });
 
-// --- Dropbox File Operations ---
+// --- Dropbox File Operations (Removed temp folder logic) ---
 
-const getTempDirs = () => {
-  const root = path.join(app.getPath('documents'), 'Island', 'temp');
-  const copyDir = path.join(root, 'copy');
-  const moveDir = path.join(root, 'move');
-
-  [root, copyDir, moveDir].forEach(dir => {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  });
-
-  return { root, copyDir, moveDir };
-};
-
-ipcMain.handle('get-temp-files', async () => {
-  const { copyDir, moveDir } = getTempDirs();
-  try {
-    const copyFiles = fs.readdirSync(copyDir).map(f => ({ name: f, path: path.join(copyDir, f), type: 'copy' }));
-    const moveFiles = fs.readdirSync(moveDir).map(f => ({ name: f, path: path.join(moveDir, f), type: 'move' }));
-    return [...copyFiles, ...moveFiles];
-  } catch (err) {
-    console.error('[Main] Error reading temp dirs:', err);
-    return [];
-  }
-});
-
-ipcMain.handle('copy-to-temp', async (event, filePaths) => {
-  const { copyDir } = getTempDirs();
-  const results = [];
-  for (const filePath of filePaths) {
-    try {
-      const fileName = path.basename(filePath);
-      const destPath = path.join(copyDir, fileName);
-      fs.copyFileSync(filePath, destPath);
-      results.push({ name: fileName, path: destPath, success: true });
-    } catch (err) {
-      console.error(`[Main] Error copying ${filePath}:`, err);
-      results.push({ name: path.basename(filePath), path: '', success: false, error: err.message });
-    }
-  }
-  return results;
-});
-
-ipcMain.handle('move-to-temp', async (event, filePaths) => {
-  const { moveDir } = getTempDirs();
-  const results = [];
-  for (const filePath of filePaths) {
-    try {
-      const fileName = path.basename(filePath);
-      const destPath = path.join(moveDir, fileName);
-      fs.renameSync(filePath, destPath);
-      results.push({ name: fileName, path: destPath, success: true });
-    } catch (err) {
-      console.error(`[Main] Error moving ${filePath}:`, err);
-      results.push({ name: path.basename(filePath), path: '', success: false, error: err.message });
-    }
-  }
-  return results;
-});
-
-ipcMain.handle('clear-temp-files', async (event, filePaths) => {
-  const { copyDir, moveDir } = getTempDirs();
-  if (filePaths && filePaths.length > 0) {
-    for (const filePath of filePaths) {
-      try {
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      } catch (err) {
-        console.error(`[Main] Error deleting ${filePath}:`, err);
-      }
-    }
-  } else {
-    // Clear all
-    try {
-      [copyDir, moveDir].forEach(dir => {
-        const files = fs.readdirSync(dir);
-        for (const file of files) {
-          fs.unlinkSync(path.join(dir, file));
-        }
-      });
-    } catch (err) {
-      console.error('[Main] Error clearing temp dirs:', err);
-    }
-  }
-  return true;
-});
-
-ipcMain.handle('move-from-temp', async (event, { filePaths, destDir }) => {
-  const results = [];
-  for (const filePath of filePaths) {
-    try {
-      const fileName = path.basename(filePath);
-      const destPath = path.join(destDir, fileName);
-      fs.renameSync(filePath, destPath);
-      results.push({ name: fileName, path: destPath, success: true });
-    } catch (err) {
-      console.error(`[Main] Error moving from temp ${filePath}:`, err);
-      results.push({ name: path.basename(filePath), path: '', success: false, error: err.message });
-    }
-  }
-  return results;
-});
 
 // --- Drag and Drop Out ---
 ipcMain.on('ondragstart', (event, filePath) => {
@@ -665,10 +564,10 @@ ipcMain.on('ondragstart', (event, filePath) => {
         icon = undefined;
       }
     }
-    
+
     const normalizedPath = path.resolve(filePath);
     console.log(`[Main] Starting OS drag for REAL file: ${normalizedPath}`);
-    
+
     try {
       if (!fs.existsSync(normalizedPath)) {
         throw new Error(`File not found: ${normalizedPath}`);
@@ -677,7 +576,7 @@ ipcMain.on('ondragstart', (event, filePath) => {
       // Use the actual file's icon from the OS for a better experience
       app.getFileIcon(normalizedPath, { size: 'normal' }).then(dragIcon => {
         const win = BrowserWindow.fromWebContents(event.sender);
-        
+
         // TEMPORARILY disable mouse events and lower priority so the OS can "see" the desktop
         if (win) {
           win.setIgnoreMouseEvents(true, { forward: false });
@@ -687,25 +586,25 @@ ipcMain.on('ondragstart', (event, filePath) => {
 
         event.sender.startDrag({
           file: normalizedPath,
-          files: [normalizedPath],
           icon: dragIcon
         });
-        
+
         console.log(`[Main] OS acknowledged REAL file drag for: ${normalizedPath}`);
-        
-        // Restore window state after drag finishes
-        if (win && !win.isDestroyed()) {
-          win.setAlwaysOnTop(true, 'screen-saver');
-          // Force restore mouse events in case renderer fails to
-          win.setIgnoreMouseEvents(false);
-        }
-        
-        event.sender.send('drag-finished', filePath);
+
+        // Listen for drag-end to restore window state
+        event.sender.once('drag-end', () => {
+          console.log(`[Main] Drag ended for: ${normalizedPath}`);
+          if (win && !win.isDestroyed()) {
+            win.setAlwaysOnTop(true, 'screen-saver');
+            win.setIgnoreMouseEvents(false);
+          }
+          event.sender.send('drag-finished', filePath);
+        });
       }).catch(err => {
         console.error(`[Main] Error getting file icon:`, err);
         // Fallback to app icon or empty
         const iconPath = getIconPath();
-        const fallbackIcon = (iconPath && fs.existsSync(iconPath)) 
+        const fallbackIcon = (iconPath && fs.existsSync(iconPath))
           ? nativeImage.createFromPath(iconPath).resize({ width: 32, height: 32 })
           : nativeImage.createEmpty();
 
@@ -754,14 +653,14 @@ ipcMain.handle('save-chat-history', async (event, chat) => {
         console.error("Error reading chat history:", e);
       }
     }
-    
+
     // Add new chat
     history.push({
       id: Date.now().toString(),
       timestamp: Date.now(),
       ...chat
     });
-    
+
     fs.writeFileSync(historyPath, JSON.stringify(history, null, 2));
     return true;
   } catch (err) {
@@ -804,7 +703,7 @@ const MAX_CLIPBOARD_ITEMS = 50;
 const updateClipboardHistory = () => {
   const text = clipboard.readText();
   const image = clipboard.readImage();
-  
+
   let newItem = null;
 
   if (!image.isEmpty()) {
@@ -864,7 +763,7 @@ ipcMain.handle('delete-clipboard-item', (event, timestamp) => {
     // If we are deleting the item that is currently on the system clipboard, clear it
     const currentText = clipboard.readText();
     const currentImage = clipboard.readImage();
-    
+
     let isCurrent = false;
     if (itemToDelete.type === 'text' && itemToDelete.content === currentText) {
       isCurrent = true;

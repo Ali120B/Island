@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 export default function Settings() {
     const [batteryAlerts, setBatteryAlerts] = useState(localStorage.getItem("battery-alerts") !== "false");
@@ -247,14 +248,27 @@ export default function Settings() {
 
                     <div style={{ marginBottom: 0 }}>
                         <label style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>Hour Format</label>
-                        <select 
-                            value={hourFormat} 
-                            onChange={(e) => { setHourFormat(e.target.value); saveSetting("hour-format", e.target.value); }}
-                            style={{ width: '100%', background: '#1f1f1f', border: '1px solid #333', borderRadius: 10, padding: '10px 15px', color: 'white', outline: 'none' }}
-                        >
-                            <option value="12-hr">12-Hour (AM/PM)</option>
-                            <option value="24-hr">24-Hour</option>
-                        </select>
+                        <div style={{ position: 'relative' }}>
+                            <select 
+                                value={hourFormat} 
+                                onChange={(e) => { setHourFormat(e.target.value); saveSetting("hour-format", e.target.value); }}
+                                style={{ 
+                                    width: '100%', 
+                                    appearance: 'none',
+                                    background: '#1f1f1f', 
+                                    border: '1px solid #333', 
+                                    borderRadius: 10, 
+                                    padding: '10px 15px', 
+                                    color: 'white', 
+                                    outline: 'none',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <option value="12-hr" style={{ background: '#141414' }}>12-Hour (AM/PM)</option>
+                                <option value="24-hr" style={{ background: '#141414' }}>24-Hour</option>
+                            </select>
+                            <ChevronDown size={16} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', opacity: 0.5 }} />
+                        </div>
                     </div>
                 </section>
 
@@ -277,25 +291,38 @@ export default function Settings() {
 
                     <div style={{ marginBottom: 20 }}>
                         <label style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>Model Selector</label>
-                        <select 
-                            value={aiModel} 
-                            onChange={(e) => { setAiModel(e.target.value); saveSetting("ai-model", e.target.value); }}
-                            style={{ width: '100%', background: '#1f1f1f', border: '1px solid #333', borderRadius: 10, padding: '10px 15px', color: 'white', outline: 'none' }}
-                        >
-                            <optgroup label="Free Models">
-                                <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash Exp (Free)</option>
-                                <option value="google/gemini-2.0-pro-exp-02-05:free">Gemini 2.0 Pro Exp (Free)</option>
-                                <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B (Free)</option>
-                                <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
-                                <option value="deepseek/deepseek-chat:free">DeepSeek Chat (Free)</option>
-                            </optgroup>
-                            <optgroup label="Standard Models">
-                                <option value="openai/gpt-4o">GPT-4o</option>
-                                <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
-                                <option value="meta-llama/llama-3.1-405b">Llama 3.1 405B</option>
-                            </optgroup>
-                            <option value="custom">Custom Model ID</option>
-                        </select>
+                        <div style={{ position: 'relative' }}>
+                            <select 
+                                value={aiModel} 
+                                onChange={(e) => { setAiModel(e.target.value); saveSetting("ai-model", e.target.value); }}
+                                style={{ 
+                                    width: '100%', 
+                                    appearance: 'none',
+                                    background: '#1f1f1f', 
+                                    border: '1px solid #333', 
+                                    borderRadius: 10, 
+                                    padding: '10px 15px', 
+                                    color: 'white', 
+                                    outline: 'none',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <optgroup label="Free Models" style={{ background: '#141414' }}>
+                                    <option value="google/gemini-2.0-flash-exp:free" style={{ background: '#141414' }}>Gemini 2.0 Flash Exp (Free)</option>
+                                    <option value="google/gemini-2.0-pro-exp-02-05:free" style={{ background: '#141414' }}>Gemini 2.0 Pro Exp (Free)</option>
+                                    <option value="meta-llama/llama-3.3-70b-instruct:free" style={{ background: '#141414' }}>Llama 3.3 70B (Free)</option>
+                                    <option value="mistralai/mistral-7b-instruct:free" style={{ background: '#141414' }}>Mistral 7B (Free)</option>
+                                    <option value="deepseek/deepseek-chat:free" style={{ background: '#141414' }}>DeepSeek Chat (Free)</option>
+                                </optgroup>
+                                <optgroup label="Standard Models" style={{ background: '#141414' }}>
+                                    <option value="openai/gpt-4o" style={{ background: '#141414' }}>GPT-4o</option>
+                                    <option value="anthropic/claude-3.5-sonnet" style={{ background: '#141414' }}>Claude 3.5 Sonnet</option>
+                                    <option value="meta-llama/llama-3.1-405b" style={{ background: '#141414' }}>Llama 3.1 405B</option>
+                                </optgroup>
+                                <option value="custom" style={{ background: '#141414' }}>Custom Model ID</option>
+                            </select>
+                            <ChevronDown size={16} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', opacity: 0.5 }} />
+                        </div>
                     </div>
 
                     {aiModel === 'custom' && (

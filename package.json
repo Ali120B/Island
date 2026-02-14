@@ -1,7 +1,7 @@
 {
   "name": "island-app",
   "productName": "Island",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Dynamic Island for windows",
   "main": ".vite/build/main.js",
   "scripts": {
