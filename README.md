@@ -25,13 +25,12 @@ The Dynamic Island for Windows.
 - ✅ **Standby & Stealth Modes**: Configurable visibility and persistence settings.
 - ✅ **Scroll Actions**: Control volume or brightness directly by scrolling over the island.
 - ✅ **Cross-Monitor Support**: Syncs across all your desktops and monitors.
+- ✅ **App shortcut support**: Add app shortcuts for apps you like.
 
 ### Todo
-- Add a bluetooth devices page - In progress
-- Add google calendar support for calendar
-- Add a page where users can put app shortcuts - In progress
-- Fix Clipboard not resizing properly - In progress
+- Add google calendar support for calendar - In progress
 - Add notification support - In progress
+- Notch Mode
 
 ## Build Instructions (Windows)
 
