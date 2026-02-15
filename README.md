@@ -31,6 +31,7 @@ The Dynamic Island for Windows.
 - Add google calendar support for calendar
 - Add a page where users can put app shortcuts
 - Fix Clipboard not resizing properly
+- Add notification support
 
 ## Build Instructions (Windows)
 
