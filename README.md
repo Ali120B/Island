@@ -30,6 +30,7 @@ The Dynamic Island for Windows.
 - Add a bluetooth devices page
 - Add google calendar support for calendar
 - Add a page where users can put app shortcuts
+- Fix Clipboard not resizing properly
 
 ## Build Instructions (Windows)
 
