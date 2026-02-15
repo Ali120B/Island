@@ -26,6 +26,11 @@ The Dynamic Island for Windows.
 - ✅ **Scroll Actions**: Control volume or brightness directly by scrolling over the island.
 - ✅ **Cross-Monitor Support**: Syncs across all your desktops and monitors.
 
+### Todo
+Add a bluetooth devices page
+Add google calendar support for calendar
+Add a page where users can put app shortcuts
+
 ## Build Instructions (Windows)
 
 ### Standard Build
