@@ -31,7 +31,7 @@ What happens when you run this?
 ### 3. Summary of your New Commands
 I have configured these specifically in your package.json :
 
-- npm run build : Test the build locally.
+- npm run dev : Test the build locally.
 - npm run dist : Create the installer in the dist/ folder (useful for manual testing).
 - npm run publish : The "Magic Button" that builds and sends everything to GitHub.
 ### 4. Troubleshooting Tips
