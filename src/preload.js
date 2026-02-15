@@ -5,7 +5,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setIgnoreMouseEvents: (ignore, forward) => ipcRenderer.invoke('set-ignore-mouse-events', ignore, forward),
   controlSystemMedia: (action) => ipcRenderer.invoke('control-system-media', action),
   getSystemMedia: () => ipcRenderer.invoke('get-system-media'),
-  getBluetoothStatus: () => ipcRenderer.invoke('get-bluetooth-status'),
+  selectFile: () => ipcRenderer.invoke('select-file'),
+  openApp: (path) => ipcRenderer.invoke('open-app', path),
+  getAppIcon: (path) => ipcRenderer.invoke('get-app-icon', path),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   openSettings: () => ipcRenderer.send('open-settings'),
   hideIsland: () => ipcRenderer.send('hide-island'),
@@ -32,5 +34,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveCalendarEvents: (events) => ipcRenderer.invoke('save-calendar-events', events),
   onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (event, version) => callback(version)),
   onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (event, version) => callback(version)),
+  getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
   quitAndInstall: () => ipcRenderer.send('quit-and-install')
 });

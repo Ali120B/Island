@@ -37,6 +37,17 @@ export default function Settings() {
                 setUpdateDownloaded(true);
             });
         }
+        
+        // Check initial status
+        const checkStatus = async () => {
+            if (window.electronAPI?.getUpdateStatus) {
+                const status = await window.electronAPI.getUpdateStatus();
+                if (status) {
+                    setUpdateDownloaded(true);
+                }
+            }
+        };
+        checkStatus();
     }, []);
 
     useEffect(() => {

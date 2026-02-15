@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Component } from 'react';
-import { Home, Music, MessageSquare, Cloud, Battery, BatteryLow, BatteryMedium, BatteryFull, Zap, ChevronLeft, ChevronRight, Sun, Moon, Box, Search, History, Trash2, X, Clipboard as ClipboardIcon, Volume2, VolumeX, Wind, Droplets, Thermometer, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Timer as TimerIcon, Pin, CloudRain, Plus, List, Edit2, Settings, Check, GripVertical, Calendar } from 'lucide-react';
+import { Home, Music, MessageSquare, Cloud, Battery, BatteryLow, BatteryMedium, BatteryFull, Zap, ChevronLeft, ChevronRight, Sun, Moon, Box, Search, History, Trash2, X, Clipboard as ClipboardIcon, Volume2, VolumeX, Wind, Droplets, Thermometer, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Timer as TimerIcon, Pin, CloudRain, Plus, List, Edit2, Settings, Check, GripVertical, Calendar, LayoutGrid, Folder } from 'lucide-react';
 import { OpenAI } from "openai";
 import "./App.css";
 import lowBatteryIcon from "./assets/images/lowbattery.png";
@@ -264,8 +264,7 @@ export default function Island() {
   const [charging, setCharging] = useState(false);
   const [chargingAlert, setChargingAlert] = useState(false);
   const [spotifyTrack, setSpotifyTrack] = useState(null);
-  const [bluetooth, setBluetooth] = useState(false);
-  const [bluetoothAlert, setBluetoothAlert] = useState(false);
+
   const [prevView, setPrevView] = useState("home");
   const [showArrows, setShowArrows] = useState(localStorage.getItem("show-nav-arrows") === "true");
   const [infiniteScroll, setInfiniteScroll] = useState(localStorage.getItem("infinite-scroll") === "true");
@@ -296,6 +295,13 @@ export default function Island() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
+  
+  const [appShortcuts, setAppShortcuts] = useState(() => {
+    const saved = localStorage.getItem("island-app-shortcuts");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [showAppShortcutModal, setShowAppShortcutModal] = useState(false);
+  const [newAppPath, setNewAppPath] = useState('');
 
   useEffect(() => {
     if (window.electronAPI?.onUpdateDownloaded) {
@@ -305,10 +311,14 @@ export default function Island() {
     }
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem("island-app-shortcuts", JSON.stringify(appShortcuts));
+  }, [appShortcuts]);
+  
   const [layoutOrder, setLayoutOrder] = useState(() => {
     const saved = localStorage.getItem("island-layout-order");
     const defaultOrder = {
-      pages: ['weather', 'search', 'home', 'music', 'ai', 'todo'],
+      pages: ['weather', 'app_shortcuts', 'search', 'home', 'music', 'ai', 'todo'],
       hiddenPages: [],
       home: ['clipboard', 'dropbox'],
       todo: ['calendar', 'timer'],
@@ -317,10 +327,30 @@ export default function Island() {
     };
     if (!saved) return defaultOrder;
     const parsed = JSON.parse(saved);
+
+    // Migration: Add new pages if missing
+    let pages = parsed.pages || defaultOrder.pages;
+    let hiddenPages = parsed.hiddenPages || defaultOrder.hiddenPages;
+
+    // Remove bluetooth if present
+    if (pages.includes('bluetooth')) {
+        pages = pages.filter(p => p !== 'bluetooth');
+    }
+    if (hiddenPages.includes('bluetooth')) {
+        hiddenPages = hiddenPages.filter(p => p !== 'bluetooth');
+    }
+
+    if (!pages.includes('app_shortcuts') && !hiddenPages.includes('app_shortcuts')) {
+       // Add app_shortcuts left of search
+       const searchIdx = pages.indexOf('search');
+       if (searchIdx !== -1) pages.splice(searchIdx, 0, 'app_shortcuts');
+       else pages.push('app_shortcuts');
+    }
+
     // Ensure all keys exist
     return {
-      pages: parsed.pages || defaultOrder.pages,
-      hiddenPages: parsed.hiddenPages || defaultOrder.hiddenPages,
+      pages: pages,
+      hiddenPages: hiddenPages,
       home: parsed.home || defaultOrder.home,
       todo: parsed.todo || defaultOrder.todo,
       weather: parsed.weather || defaultOrder.weather,
@@ -958,6 +988,7 @@ export default function Island() {
         case 'todo_calendar_events': return { width: 430, height: 340 };
         case 'weather': return { width: 350, height: 220 };
         case 'weather_details': return { width: 350, height: 200 };
+        case 'app_shortcuts': return { width: 420, height: 340 };
         case 'search_urls': return { width: 400, height: 210 };
         case 'search': return { width: 420, height: searchResults.length > 0 ? (searchResults.length * 65 + 100) : 180 };
         case 'settings': return { width: 420, height: 380 };
@@ -1597,41 +1628,9 @@ export default function Island() {
     return () => clearInterval(interval);
   }, []);
 
-  // Get Bluetooth
-  useEffect(() => {
-    const fetchBluetooth = async () => {
-      if (window.electronAPI?.getBluetoothStatus) {
-        try {
-          const isConnected = await window.electronAPI.getBluetoothStatus();
-          setBluetooth(isConnected);
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    };
 
-    // Immediate initial fetch
-    fetchBluetooth();
 
-    // Set up interval (5s)
-    const interval = setInterval(fetchBluetooth, 5000);
 
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (bluetooth === true) {
-      setMode("quick");
-      setBluetoothAlert(true);
-      const timerId = setTimeout(() => {
-        setMode("still");
-        setBluetoothAlert(false);
-      }, 3000);
-      return () => {
-        clearTimeout(timerId);
-      };
-    }
-  }, [bluetooth]);
 
   // Now Playing
   useEffect(() => {
@@ -1854,7 +1853,7 @@ export default function Island() {
         justifyContent: "center",
         overflow: "hidden",
         fontFamily: theme === "win95" ? "w95" : "OpenRunde",
-        border: theme === "win95" ? "2px solid rgb(254, 254, 254)" : islandBorderEnabled ? (alert ? `${islandBorderThickness}px ${islandBorderStyle} rgba(255, 38, 0, 0.34)` : bluetoothAlert ? `${islandBorderThickness}px ${islandBorderStyle} rgba(0, 150, 255, 0.34)` : chargingAlert ? `${islandBorderThickness}px ${islandBorderStyle} rgba(3, 196, 3, 0.301)` : hideNotActiveIslandEnabled ? "none" : `${islandBorderThickness}px ${islandBorderStyle} ${islandBorderColor}`) : "none",
+        border: theme === "win95" ? "2px solid rgb(254, 254, 254)" : islandBorderEnabled ? (alert ? `${islandBorderThickness}px ${islandBorderStyle} rgba(255, 38, 0, 0.34)` : chargingAlert ? `${islandBorderThickness}px ${islandBorderStyle} rgba(3, 196, 3, 0.301)` : hideNotActiveIslandEnabled ? "none" : `${islandBorderThickness}px ${islandBorderStyle} ${islandBorderColor}`) : "none",
         borderColor:
           theme === "win95"
             ? "#FFFFFF #808080 #808080 #FFFFFF"
@@ -1876,6 +1875,8 @@ export default function Island() {
         zIndex: 9999
       }}
     >
+      {/* Notification View */}
+
       {/* Watch Live Bar (Timer/Stopwatch Running or Paused with value) */}
       {(isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) && mode !== 'large' && !ringingEvent && (
         <div
@@ -2117,7 +2118,7 @@ export default function Island() {
       {/*Quickview*/}
       {(mode === "quick" || (mode === "still" && isPlaying)) && !ringingEvent && !(isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) ? (
         <>
-          {isPlaying && !alert && !chargingAlert && !bluetoothAlert ? (
+          {isPlaying && !alert && !chargingAlert ? (
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -2170,7 +2171,7 @@ export default function Island() {
                   color: chargingAlert === true && !alert ? "#6fff7bff" : localStorage.getItem("text-color")
                 }}
               >
-                {alert === true ? <img src={lowBatteryIcon} alt="low battery" style={{ width: 40, height: 40, objectFit: 'contain', position: 'absolute', transform: 'translate(0%, -50%)' }} /> : chargingAlert ? <img src={chargingIcon} alt="charging" style={{ width: 40, height: 40, objectFit: 'contain', position: 'absolute', transform: 'translate(0%, -50%)' }} /> : bluetoothAlert ? "🎧" : (
+                {alert === true ? <img src={lowBatteryIcon} alt="low battery" style={{ width: 40, height: 40, objectFit: 'contain', position: 'absolute', transform: 'translate(0%, -50%)' }} /> : chargingAlert ? <img src={chargingIcon} alt="charging" style={{ width: 40, height: 40, objectFit: 'contain', position: 'absolute', transform: 'translate(0%, -50%)' }} /> : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span>{time}</span>
                   </div>
@@ -2192,7 +2193,7 @@ export default function Island() {
                     : `${localStorage.getItem("text-color")} `
                 }}
               >
-                {alert === true ? `${percent}% ` : chargingAlert === true ? `${percent}% ` : standbyBorderEnabled ? "" : bluetoothAlert ? "Connected" : (
+                {alert === true ? `${percent}% ` : chargingAlert === true ? `${percent}% ` : standbyBorderEnabled ? "" : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Cloud size={16} color={textColor} />
                     <span>{weather ? `${weather} º` : ""}</span>
@@ -2264,6 +2265,7 @@ export default function Island() {
                     case 'music': return <Music size={14} color={textColor} />;
                     case 'ai': return <MessageSquare size={14} color={textColor} />;
                     case 'todo': return <List size={14} color={textColor} />;
+                    case 'app_shortcuts': return <LayoutGrid size={14} color={textColor} />;
                     default: return <ChevronLeft size={14} color={textColor} />;
                   }
                 }
@@ -2309,6 +2311,7 @@ export default function Island() {
                     case 'music': return <Music size={14} color={textColor} />;
                     case 'ai': return <MessageSquare size={14} color={textColor} />;
                     case 'todo': return <List size={14} color={textColor} />;
+                    case 'app_shortcuts': return <LayoutGrid size={14} color={textColor} />;
                     default: return <ChevronRight size={14} color={textColor} />;
                   }
                 }
@@ -2820,7 +2823,7 @@ export default function Island() {
                                   }}
                                 >
                                   <GripVertical size={10} style={{ opacity: 0.4 }} />
-                                  {page.charAt(0).toUpperCase() + page.slice(1)}
+                                  {page === 'app_shortcuts' ? 'App Shortcuts' : page.charAt(0).toUpperCase() + page.slice(1)}
                                 </div>
                               ))}
                             </div>
@@ -2882,7 +2885,7 @@ export default function Island() {
                                   }}
                                 >
                                   <GripVertical size={8} style={{ opacity: 0.3 }} />
-                                  {page.charAt(0).toUpperCase() + page.slice(1)}
+                                  {page === 'app_shortcuts' ? 'App Shortcuts' : page.charAt(0).toUpperCase() + page.slice(1)}
                                 </div>
                               ))}
                               {layoutOrder.hiddenPages.length === 0 && (
@@ -4144,6 +4147,157 @@ export default function Island() {
           )}
         </div>
 
+
+
+        {/* App Shortcuts View */}
+        <div style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          opacity: (view === 'app_shortcuts' && mode === 'large') ? 1 : 0,
+          pointerEvents: (view === 'app_shortcuts' && mode === 'large') ? 'auto' : 'none',
+          transform: getHorizontalTransform('app_shortcuts'),
+          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>APP SHORTCUTS</div>
+          </div>
+          <div style={{
+            width: '100%', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 15,
+            animation: 'appear 0.3s ease-out', padding: '0 10px', justifyItems: 'center',
+            maxHeight: '260px', overflowY: 'auto', marginTop: 20
+          }}>
+            {appShortcuts.map((app, idx) => (
+                <div key={idx} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                    <div
+                        onClick={() => {
+                             window.electronAPI?.openApp ? window.electronAPI.openApp(app.path) : console.log("Open", app.path);
+                             setView('home');
+                        }}
+                        onContextMenu={(e) => {
+                            e.preventDefault();
+                            const newApps = appShortcuts.filter((_, i) => i !== idx);
+                            setAppShortcuts(newApps);
+                        }}
+                        style={{
+                            width: 50, height: 50, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+                            background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.2s ease', position: 'relative'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                       {app.icon ? (
+                           <img src={app.icon} alt={app.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                       ) : (
+                           <Box size={20} color={textColor} />
+                       )}
+                    </div>
+                    <span style={{ fontSize: 10, opacity: 0.7, maxWidth: 60, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{app.name}</span>
+                </div>
+            ))}
+            
+            {/* App Shortcut Options Modal */}
+            {showAppShortcutModal && (
+              <div style={{
+                position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.85)', borderRadius: 15, zIndex: 100,
+                display: 'flex', flexDirection: 'column', padding: '20px', backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                justifyContent: 'center', gap: 15
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5, textAlign: 'center' }}>
+                  ADD SHORTCUT
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                   <div
+                      onClick={async () => {
+                          if (window.electronAPI?.selectFile) {
+                              const path = await window.electronAPI.selectFile();
+                              if (path) {
+                                  // Get icon
+                                  let icon = null;
+                                  if (window.electronAPI?.getAppIcon) {
+                                      icon = await window.electronAPI.getAppIcon(path);
+                                  }
+                                  // Extract name from path (last part, remove extension)
+                                  const name = path.split('\\').pop().split('/').pop().replace(/\.[^/.]+$/, "");
+                                  setAppShortcuts([...appShortcuts, { name, path, icon }]);
+                                  setShowAppShortcutModal(false);
+                              }
+                          }
+                      }}
+                      style={{
+                          padding: '12px', borderRadius: 12, background: 'rgba(255, 255, 255, 0.08)',
+                          color: '#ffffff', fontSize: 13, fontWeight: 500, textAlign: 'center', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                          transition: 'background 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+                   >
+                      <Folder size={16} /> Find File...
+                   </div>
+                   
+                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: 0.5 }}>
+                      <div style={{ flex: 1, height: 1, background: 'white' }} />
+                      <span style={{ fontSize: 10 }}>OR</span>
+                      <div style={{ flex: 1, height: 1, background: 'white' }} />
+                   </div>
+
+                   <input
+                      type="text"
+                      placeholder="Enter Path (e.g. C:\Windows\System32\notepad.exe)"
+                      value={newAppPath}
+                      onChange={(e) => setNewAppPath(e.target.value)}
+                      onKeyDown={async (e) => {
+                          if (e.key === 'Enter' && newAppPath.trim()) {
+                              const path = newAppPath.trim();
+                              let icon = null;
+                              if (window.electronAPI?.getAppIcon) {
+                                  icon = await window.electronAPI.getAppIcon(path);
+                              }
+                              const name = path.split('\\').pop().split('/').pop().replace(/\.[^/.]+$/, "");
+                              setAppShortcuts([...appShortcuts, { name, path, icon }]);
+                              setShowAppShortcutModal(false);
+                              setNewAppPath('');
+                          }
+                      }}
+                      style={{ padding: '10px 15px', borderRadius: 12, border: 'none', outline: 'none', background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: 13 }}
+                   />
+                </div>
+
+                <div
+                  onClick={() => {
+                    setShowAppShortcutModal(false);
+                    setNewAppPath('');
+                  }}
+                  style={{ padding: '10px', borderRadius: 12, background: 'rgba(239, 68, 68, 0.14)', color: '#ef4444', fontSize: 12, fontWeight: 800, textAlign: 'center', cursor: 'pointer', marginTop: 5 }}
+                >
+                  CANCEL
+                </div>
+              </div>
+            )}
+            
+            <div
+                onClick={() => setShowAppShortcutModal(true)}
+                style={{
+                    width: 50, height: 50, borderRadius: 12, cursor: 'pointer',
+                    background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.2s ease', border: '1px dashed rgba(255,255,255,0.2)'
+                }}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 0 15px rgba(255,255,255,0.1)';
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = 'none';
+                }}
+            >
+                <Plus size={20} color={textColor} opacity={0.5} />
+            </div>
+          </div>
+        </div>
+
         {/* AI Chat View */}
         <div style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
@@ -4881,7 +5035,8 @@ export default function Island() {
                   style={{
                     padding: '10px', borderRadius: 12, background: 'rgba(255,255,255,0.05)',
                     border: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer',
-                    transition: 'all 0.2s ease', position: 'relative', overflow: 'hidden'
+                    transition: 'all 0.2s ease', position: 'relative', overflow: 'hidden',
+                    flexShrink: 0
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = 'rgba(255,255,255,0.1)';

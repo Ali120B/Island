@@ -3,6 +3,7 @@ const { app, BrowserWindow, screen, ipcMain, shell, Tray, Menu, nativeImage, cli
 const { autoUpdater } = require("electron-updater");
 const path = require("node:path");
 const fs = require("fs");
+const { exec } = require('child_process');
 
 // Disable autoplay restrictions
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -11,7 +12,11 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 let tray = null;
 let mainWindow = null;
 let settingsWindow = null;
-const { exec } = require('child_process');
+let updateDownloadedInfo = null;
+
+ipcMain.handle('get-update-status', () => {
+  return updateDownloadedInfo;
+});
 
 ipcMain.handle('set-ignore-mouse-events', (event, ignore, forward) => {
   if (mainWindow) {
@@ -59,6 +64,8 @@ const getIconPath = () => {
 
   return undefined;
 };
+
+
 
 const createWindow = () => {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -203,6 +210,7 @@ app.whenReady().then(() => {
 
     autoUpdater.on('update-downloaded', (info) => {
       console.log('[Updater] Update downloaded:', info.version);
+      updateDownloadedInfo = info;
       if (settingsWindow) settingsWindow.webContents.send('update-downloaded', info.version);
       if (mainWindow) mainWindow.webContents.send('update-downloaded', info.version);
       
@@ -358,6 +366,29 @@ Write-Output $newBrightness
       resolve(Number.isFinite(n) ? n : null);
     });
   });
+});
+
+ipcMain.handle('select-file', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [{ name: 'Applications', extensions: ['exe', 'lnk'] }]
+  });
+  if (result.canceled) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('open-app', async (event, path) => {
+  await shell.openPath(path);
+});
+
+ipcMain.handle('get-app-icon', async (event, filePath) => {
+  try {
+    const icon = await app.getFileIcon(filePath);
+    return icon.toDataURL();
+  } catch (e) {
+    console.error('Error getting icon:', e);
+    return null;
+  }
 });
 
 ipcMain.handle('save-todo', async (event, todos) => {
@@ -540,20 +571,7 @@ try {
   });
 });
 
-ipcMain.handle('get-bluetooth-status', async () => {
-  return new Promise((resolve) => {
-    // Windows logic (simplified to only handle win32)
-    const psScript = `
-        Add-Type -AssemblyName System.Runtime.WindowsRuntime
-        $devices = [Windows.Devices.Enumeration.DeviceInformation, Windows.Devices.Enumeration, ContentType = WindowsRuntime]::FindAllAsync('(System.Devices.Aep.ProtocolId:="{e0cbf06c-5021-4943-9112-460f89956c33}") AND (System.Devices.Aep.IsConnected:=$true)').GetAwaiter().GetResult()
-        return $devices.Count > 0
-      `;
-    exec(`powershell -Command "${psScript.replace(/"/g, '\\"')}"`, (error, stdout) => {
-      if (error) return resolve(false);
-      resolve(stdout.trim().toLowerCase() === 'true');
-    });
-  });
-});
+
 
 app.on("window-all-closed", () => {
   // Always quit when window is closed on Windows
