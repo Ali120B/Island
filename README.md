@@ -27,11 +27,11 @@ The Dynamic Island for Windows.
 - ✅ **Cross-Monitor Support**: Syncs across all your desktops and monitors.
 
 ### Todo
-- Add a bluetooth devices page
+- Add a bluetooth devices page - In progress
 - Add google calendar support for calendar
-- Add a page where users can put app shortcuts
-- Fix Clipboard not resizing properly
-- Add notification support
+- Add a page where users can put app shortcuts - In progress
+- Fix Clipboard not resizing properly - In progress
+- Add notification support - In progress
 
 ## Build Instructions (Windows)
 
