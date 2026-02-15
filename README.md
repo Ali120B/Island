@@ -5,7 +5,7 @@ The Dynamic Island for Windows.
 
 ## Features
 - ✅ **Dynamic Scaling**: Island intelligently resizes based on content (Time, Music, AI, Dropbox, Clipboard, Todo, Weather, Search).
-- ✅ **Dropbox (File Transfer)**: Drag and drop files to temporarily store, copy, or move them across folders.
+- ✅ **Dropbox (File Transfer)**: Drag and drop files to copy, or move them across folders.
 - ✅ **AI Assistant**: Quick access to AI chat (powered by OpenRouter) for instant answers with history support.
 - ✅ **Clipboard History**: Full access to your clipboard history with support for text and images.
 - ✅ **Media Integration**: Real-time "Now Playing" preview with native media controls and rotating vinyl artwork.
