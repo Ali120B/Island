@@ -15,7 +15,7 @@ The Dynamic Island for Windows.
 - ✅ **Quick URLs**: Pin and launch your favorite websites with high-quality squircle icons.
 - ✅ **Bluetooth & Battery Alerts**: Real-time status for connected devices and charging/battery levels.
 - ✅ **Search & URL Bar**: Quickly search Google or navigate directly to URLs.
-- ✅ **Themes & Customization**: Supports multiple themes (Default, Win95, SleekBlack) and custom backgrounds/opacity/corners.
+- ✅ **Themes & Customization**: Supports multiple themes and support for island border(custom color), and custom color for timer progress border
 - ✅ **Interactive Banners**: Real-time alerts and progress bars for Timers, Stopwatches, and upcoming Calendar events.
 - ✅ **Timer Progress Border**: Visual progress ring around the island during active countdowns.
 - ✅ **Custom Clock Styles**: Multiple analog and digital clock designs with custom font support (W95, OpenRunde, etc.).
@@ -23,7 +23,6 @@ The Dynamic Island for Windows.
 - ✅ **Advanced Search**: Integrated URL bar for direct navigation and real-time web search results.
 - ✅ **Dynamic Layouts**: Fully customizable page order and visibility with drag-and-drop reordering for all tiles.
 - ✅ **Standby & Stealth Modes**: Configurable visibility and persistence settings.
-- ✅ **Keyboard Shortcuts**: Efficient navigation and control via hotkeys.
 - ✅ **Scroll Actions**: Control volume or brightness directly by scrolling over the island.
 - ✅ **Cross-Monitor Support**: Syncs across all your desktops and monitors.
 
@@ -39,10 +38,6 @@ Artifacts will be found in the `out/make` directory.
 ## Distribution
 
 
-### Official Package Managers
-- **Chocolatey (Windows)**: Nuspec available at `packaging/chocolatey/ripple.nuspec`
-
-Check the `packaging/` directory for integration details.
 
 Credit to the original project: https://github.com/TopMyster/Ripple
-Which was used as an inspiration and a base for this project, even though its been heavily changed.
+Which was used as an inspiration for this project, though its been heavily changed.
