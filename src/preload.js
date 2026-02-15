@@ -29,5 +29,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveTodo: (todos) => ipcRenderer.invoke('save-todo', todos),
   getTodo: () => ipcRenderer.invoke('get-todo'),
   getCalendarEvents: () => ipcRenderer.invoke('get-calendar-events'),
-  saveCalendarEvents: (events) => ipcRenderer.invoke('save-calendar-events', events)
+  saveCalendarEvents: (events) => ipcRenderer.invoke('save-calendar-events', events),
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (event, version) => callback(version)),
+  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (event, version) => callback(version)),
+  quitAndInstall: () => ipcRenderer.send('quit-and-install')
 });

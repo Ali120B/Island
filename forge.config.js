@@ -14,21 +14,26 @@ module.exports = {
   rebuildConfig: {},
   makers: [
     {
-      name: '@electron-forge/maker-wix',
+      name: 'electron-forge-maker-nsis',
       config: {
-        language: 1033,
-        manufacturer: 'Ali Bashmail',
-        description: 'Ripple - Dynamic Island for Windows',
-        installScope: 'perUser',
-        ui: {
-          chooseDirectory: true,
-        },
-        icon: 'src/assets/icons/icon.ico',
-        shortcut: {
-          desktop: true,
+        nsis: {
+          oneClick: false,
+          perMachine: false,
+          allowElevation: true,
+          allowToChangeInstallationDirectory: true,
+          createDesktopShortcut: true,
+          createStartMenuShortcut: true,
+          shortcutName: 'Island',
+          uninstallDisplayName: 'Island',
+          deleteAppDataOnUninstall: false,
+          runAfterFinish: true
         }
       }
-    }
+    },
+    {
+      name: '@electron-forge/maker-zip',
+      platforms: ['win32'],
+    },
   ],
   plugins: [
     {

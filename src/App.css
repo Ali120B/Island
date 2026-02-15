@@ -19,6 +19,18 @@ body {
   display: none;
 }
 
+@property --timer-progress {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+
+.timer-progress-border {
+  --timer-progress: 0%;
+  --timer-border-color: #FAFAFA;
+  background: conic-gradient(var(--timer-border-color) var(--timer-progress), transparent 0) !important;
+}
+
 @font-face {
   font-family: "OpenRunde";
   src: url("./assets/fonts/OpenRunde-Regular.woff") format("woff");

@@ -236,6 +236,7 @@ export default function Island() {
   const [clockFont, setClockFont] = useState(localStorage.getItem("clock-font") || "OpenRunde");
   const [showWatchInIdle, setShowWatchInIdle] = useState(localStorage.getItem("show-watch-idle") !== "false");
   const [showTimerBorder, setShowTimerBorder] = useState(localStorage.getItem("show-timer-border") !== "false");
+  const [timerBorderColor, setTimerBorderColor] = useState(localStorage.getItem("timer-border-color") || "#FAFAFA");
   const [scrollValue, setScrollValue] = useState(0); // For the visual bar
   const [showScrollOverlay, setShowScrollOverlay] = useState(false);
   const overlayTimeout = useRef(null);
@@ -294,6 +295,16 @@ export default function Island() {
   const [showInIslandSettings, setShowInIslandSettings] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [updateDownloaded, setUpdateDownloaded] = useState(false);
+
+  useEffect(() => {
+    if (window.electronAPI?.onUpdateDownloaded) {
+      window.electronAPI.onUpdateDownloaded(() => {
+        setUpdateDownloaded(true);
+      });
+    }
+  }, []);
+
   const [layoutOrder, setLayoutOrder] = useState(() => {
     const saved = localStorage.getItem("island-layout-order");
     const defaultOrder = {
@@ -1097,6 +1108,7 @@ export default function Island() {
       setClockFont(localStorage.getItem("clock-font") || "OpenRunde");
       setShowWatchInIdle(localStorage.getItem("show-watch-idle") !== "false");
       setShowTimerBorder(localStorage.getItem("show-timer-border") !== "false");
+      setTimerBorderColor(localStorage.getItem("timer-border-color") || "#FAFAFA");
     };
 
     syncSettings();
@@ -1895,21 +1907,25 @@ export default function Island() {
           }}
         >
           {/* Animated Border Progress (Outer Bar - Idle) - Only for Timer */}
-          {(isTimerRunning || timerSeconds > 0) && !isStopwatchRunning && !ringingEvent && showTimerBorder && (showWatchInIdle || isWatchHovered) && (
-            <div style={{
-              position: 'absolute',
-              inset: '-1px',
-              borderRadius: 'inherit',
-              padding: '2.5px',
-              background: `conic-gradient(white ${(timerSeconds / (timerTotalSeconds || 1)) * 100}%, transparent 0)`,
-              WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-              WebkitMaskComposite: 'xor',
-              maskComposite: 'exclude',
-              pointerEvents: 'none',
-              opacity: !isWatchHovered ? 1 : 0,
-              transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-              zIndex: 1
-            }} />
+          {showTimerBorder && !isStopwatchRunning && !ringingEvent && (showWatchInIdle || isWatchHovered) && (
+            <div 
+              className="timer-progress-border"
+              style={{
+                position: 'absolute',
+                inset: '-1px',
+                borderRadius: 'inherit',
+                padding: '2.5px',
+                '--timer-progress': `${(timerSeconds / (timerTotalSeconds || 1)) * 100}%`,
+                '--timer-border-color': timerBorderColor,
+                WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                WebkitMaskComposite: 'xor',
+                maskComposite: 'exclude',
+                pointerEvents: 'none',
+                opacity: !isWatchHovered ? 1 : 0,
+                transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), --timer-progress 1s linear',
+                zIndex: 1
+              }} 
+            />
           )}
 
           {/* Background Content when hovered */}
@@ -1948,21 +1964,25 @@ export default function Island() {
               transform: (showWatchInIdle || isWatchHovered) ? 'scale(1)' : 'scale(0.9)'
             }}>
             {/* Animated Border Progress (Inner Pill - Hover) - Only for Timer */}
-            {(isTimerRunning || timerSeconds > 0) && !isStopwatchRunning && !ringingEvent && showTimerBorder && (
-              <div style={{
-                position: 'absolute',
-                inset: '-1px',
-                borderRadius: 'inherit',
-                padding: '2.5px',
-                background: `conic-gradient(white ${(timerSeconds / (timerTotalSeconds || 1)) * 100}%, transparent 0)`,
-                WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                WebkitMaskComposite: 'xor',
-                maskComposite: 'exclude',
-                pointerEvents: 'none',
-                opacity: isWatchHovered ? 1 : 0,
-                transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                zIndex: 1
-              }} />
+            {showTimerBorder && !isStopwatchRunning && !ringingEvent && (
+              <div 
+                className="timer-progress-border"
+                style={{
+                  position: 'absolute',
+                  inset: '-1px',
+                  borderRadius: 'inherit',
+                  padding: '2.5px',
+                  '--timer-progress': `${(timerSeconds / (timerTotalSeconds || 1)) * 100}%`,
+                  '--timer-border-color': timerBorderColor,
+                  WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  WebkitMaskComposite: 'xor',
+                  maskComposite: 'exclude',
+                  pointerEvents: 'none',
+                  opacity: isWatchHovered ? 1 : 0,
+                  transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), --timer-progress 1s linear',
+                  zIndex: 1
+                }} 
+              />
             )}
             {/* Left: Time */}
             <div style={{
@@ -2476,6 +2496,19 @@ export default function Island() {
             onMouseLeave={(e) => e.currentTarget.style.opacity = '0.25'}
           >
             <Settings size={12} color={textColor} />
+            {updateDownloaded && (
+              <div style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                width: 6,
+                height: 6,
+                background: '#ef4444',
+                borderRadius: '50%',
+                border: `1px solid ${localStorage.getItem("bg-color") || '#000'}`,
+                boxShadow: '0 0 5px rgba(239, 68, 68, 0.5)'
+              }} />
+            )}
           </div>
 
           {showInIslandSettings && (
@@ -2645,6 +2678,48 @@ export default function Island() {
                         </div>
                       </div>
                     )}
+
+                    {/* Timer Border Color */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Timer Border Color</span>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          type="color"
+                          value={timerBorderColor}
+                          onChange={(e) => {
+                            setTimerBorderColor(e.target.value);
+                            localStorage.setItem("timer-border-color", e.target.value);
+                          }}
+                          style={{
+                            width: 24,
+                            height: 24,
+                            padding: 0,
+                            border: 'none',
+                            borderRadius: 4,
+                            background: 'none',
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <input
+                          type="text"
+                          value={timerBorderColor}
+                          onChange={(e) => {
+                            setTimerBorderColor(e.target.value);
+                            localStorage.setItem("timer-border-color", e.target.value);
+                          }}
+                          style={{
+                            width: 70,
+                            background: 'rgba(255,255,255,0.08)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            color: 'white',
+                            padding: '4px 8px',
+                            borderRadius: 8,
+                            fontSize: 11,
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 

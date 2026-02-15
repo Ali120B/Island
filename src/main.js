@@ -1,5 +1,6 @@
 "use strict";
 const { app, BrowserWindow, screen, ipcMain, shell, Tray, Menu, nativeImage, clipboard, dialog } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const path = require("node:path");
 const fs = require("fs");
 
@@ -174,6 +175,45 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+  
+  // Setup Auto-Updater
+  if (app.isPackaged) {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    
+    // Configure GitHub provider explicitly (optional but safer)
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: 'Ali120B',
+      repo: 'Island'
+    });
+
+    autoUpdater.checkForUpdatesAndNotify();
+    
+    // Check for updates every hour
+    setInterval(() => {
+      autoUpdater.checkForUpdatesAndNotify();
+    }, 60 * 60 * 1000);
+
+    autoUpdater.on('update-available', (info) => {
+      console.log('[Updater] Update available:', info.version);
+      if (settingsWindow) settingsWindow.webContents.send('update-available', info.version);
+      if (mainWindow) mainWindow.webContents.send('update-available', info.version);
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+      console.log('[Updater] Update downloaded:', info.version);
+      if (settingsWindow) settingsWindow.webContents.send('update-downloaded', info.version);
+      if (mainWindow) mainWindow.webContents.send('update-downloaded', info.version);
+      
+      // Removed dialog message box as per request to use in-app banner
+    });
+
+    autoUpdater.on('error', (err) => {
+      console.error('[Updater] Error:', err);
+    });
+  }
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -229,6 +269,10 @@ app.whenReady().then(() => {
 
 ipcMain.on('open-settings', () => {
   createSettingsWindow();
+});
+
+ipcMain.on('quit-and-install', () => {
+  autoUpdater.quitAndInstall(false, true);
 });
 
 ipcMain.on('hide-island', () => {

@@ -1,27 +1,76 @@
 {
   "name": "island-app",
   "productName": "Island",
-  "version": "3.1.0",
+  "version": "3.4.0",
   "description": "Dynamic Island for windows",
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make --arch x64,ia32",
-    "publish": "electron-forge publish",
+    "build": "electron-forge package && electron-builder build --win --publish never",
+    "dist": "electron-forge package && electron-builder build --win",
+    "publish": "electron-forge package && electron-builder build --win --publish always",
     "lint": "echo \"No linting configured\""
+  },
+  "build": {
+    "appId": "com.ali120b.island",
+    "productName": "Island",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      ".vite/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "src/assets",
+        "to": "assets",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "icon": "src/assets/icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Island",
+      "uninstallDisplayName": "Island",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Ali120B",
+        "repo": "Island"
+      }
+    ]
   },
   "keywords": [],
   "author": {
     "name": "Ali Bashmail",
-    "email": "user@example.com"
+    "email": "alibashmail2010@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ali120B/Island.git"
   },
   "license": "MIT",
   "devDependencies": {
     "@electron-forge/cli": "^7.8.1",
-    "@electron-forge/maker-appx": "^7.11.1",
-    "@electron-forge/maker-squirrel": "^7.8.1",
-    "@electron-forge/maker-wix": "^7.8.1",
     "@electron-forge/maker-zip": "^7.8.1",
     "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
     "@electron-forge/plugin-fuses": "^7.8.1",
@@ -29,6 +78,7 @@
     "@electron/fuses": "^1.8.0",
     "@electron/notarize": "^2.5.0",
     "electron": "^38.7.2",
+    "electron-builder": "^26.7.0",
     "vite": "^5.4.19"
   },
   "dependencies": {
@@ -37,6 +87,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron-squirrel-startup": "^1.0.1",
+    "electron-updater": "^6.3.9",
     "groq-sdk": "^0.34.0",
     "lucide-react": "^0.563.0",
     "node-powershell": "^5.0.1",

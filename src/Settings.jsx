@@ -27,7 +27,17 @@ export default function Settings() {
     const [islandPosition, setIslandPosition] = useState(Number(localStorage.getItem("island-position") || 20));
     const [aiModel, setAiModel] = useState(localStorage.getItem("ai-model") || "openai/gpt-3.5-turbo");
     const [customModel, setCustomModel] = useState(localStorage.getItem("custom-model") || "");
-    const [scrollAction, setScrollAction] = useState(localStorage.getItem("scroll-action") || "volume");
+    const [showTimerBorder, setShowTimerBorder] = useState(localStorage.getItem("show-timer-border") !== "false");
+    const [timerBorderColor, setTimerBorderColor] = useState(localStorage.getItem("timer-border-color") || "#FAFAFA");
+    const [updateDownloaded, setUpdateDownloaded] = useState(false);
+
+    useEffect(() => {
+        if (window.electronAPI?.onUpdateDownloaded) {
+            window.electronAPI.onUpdateDownloaded(() => {
+                setUpdateDownloaded(true);
+            });
+        }
+    }, []);
 
     useEffect(() => {
         const loadRemoteSettings = async () => {
@@ -66,6 +76,8 @@ export default function Settings() {
                     if (remoteSettings["ai-model"] !== undefined) setAiModel(remoteSettings["ai-model"]);
                     if (remoteSettings["custom-model"] !== undefined) setCustomModel(remoteSettings["custom-model"]);
                     if (remoteSettings["scroll-action"] !== undefined) setScrollAction(remoteSettings["scroll-action"]);
+                    if (remoteSettings["show-timer-border"] !== undefined) setShowTimerBorder(remoteSettings["show-timer-border"] !== "false");
+                    if (remoteSettings["timer-border-color"] !== undefined) setTimerBorderColor(remoteSettings["timer-border-color"]);
                 }
             }
         };
@@ -129,7 +141,9 @@ export default function Settings() {
                 "island-position": String(islandPosition),
                 "ai-model": aiModel,
                 "custom-model": customModel,
-                "scroll-action": scrollAction
+                "scroll-action": scrollAction,
+                "show-timer-border": String(showTimerBorder),
+                "timer-border-color": timerBorderColor
             };
 
             // Update localStorage with current state values
@@ -181,6 +195,41 @@ export default function Settings() {
             boxSizing: 'border-box',
             scrollbarWidth: 'none'
         }}>
+            {updateDownloaded && (
+                <div style={{
+                    background: '#ef4444',
+                    color: 'white',
+                    padding: '12px 20px',
+                    borderRadius: '12px',
+                    marginBottom: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontWeight: 600,
+                    boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)',
+                    animation: 'slideDown 0.3s ease-out'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 14 }}>Update available! Restart now to install.</span>
+                    </div>
+                    <button
+                        onClick={() => window.electronAPI?.quitAndInstall()}
+                        style={{
+                            background: 'white',
+                            color: '#ef4444',
+                            border: 'none',
+                            padding: '6px 15px',
+                            borderRadius: '8px',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        Restart Now
+                    </button>
+                </div>
+            )}
             <header style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, letterSpacing: -0.5 }}>Island Settings</h1>
@@ -432,7 +481,8 @@ export default function Settings() {
                             { label: 'Large Standby', value: largeStandbyMode, setter: setLargeStandbyMode, key: 'large-standby-mode' },
                             { label: 'Hide when Inactive', value: hideInactive, setter: setHideInactive, key: 'hide-island-notactive' },
                             { label: 'Show Nav Arrows', value: showArrows, setter: setShowArrows, key: 'show-nav-arrows' },
-                            { label: 'Infinite Scrolling', value: infiniteScroll, setter: setInfiniteScroll, key: 'infinite-scroll' }
+                            { label: 'Infinite Scrolling', value: infiniteScroll, setter: setInfiniteScroll, key: 'infinite-scroll' },
+                            { label: 'Timer Progress Border', value: showTimerBorder, setter: setShowTimerBorder, key: 'show-timer-border' }
                         ].map(item => (
                             <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 14, fontWeight: 500 }}>{item.label}</span>
@@ -461,6 +511,24 @@ export default function Settings() {
                                 <option value="volume">Volume Control</option>
                                 <option value="brightness">Brightness Control</option>
                             </select>
+                        </div>
+
+                        <div style={{ marginTop: 10 }}>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>Timer Border Color</label>
+                            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                                <input 
+                                    type="color" 
+                                    value={timerBorderColor} 
+                                    onChange={(e) => { setTimerBorderColor(e.target.value); saveSetting("timer-border-color", e.target.value); }}
+                                    style={{ width: 40, height: 40, padding: 0, border: 'none', borderRadius: 8, background: 'none', cursor: 'pointer' }}
+                                />
+                                <input 
+                                    type="text" 
+                                    value={timerBorderColor} 
+                                    onChange={(e) => { setTimerBorderColor(e.target.value); saveSetting("timer-border-color", e.target.value); }}
+                                    style={{ flex: 1, background: '#1f1f1f', border: '1px solid #333', borderRadius: 10, padding: '10px 15px', color: 'white', outline: 'none', fontSize: 14 }}
+                                />
+                            </div>
                         </div>
                     </div>
                 </section>
