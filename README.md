@@ -27,9 +27,9 @@ The Dynamic Island for Windows.
 - ✅ **Cross-Monitor Support**: Syncs across all your desktops and monitors.
 
 ### Todo
-Add a bluetooth devices page
-Add google calendar support for calendar
-Add a page where users can put app shortcuts
+- Add a bluetooth devices page
+- Add google calendar support for calendar
+- Add a page where users can put app shortcuts
 
 ## Build Instructions (Windows)
 
