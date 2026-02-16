@@ -31,6 +31,8 @@ The Dynamic Island for Windows.
 - Add google calendar support for calendar - In progress
 - Add notification support - In progress
 - Notch Mode
+- Bluetooth devices page
+- webview in url bar
 
 ## Build Instructions (Windows)
 
