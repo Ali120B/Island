@@ -38,10 +38,10 @@ The Dynamic Island for Windows.
 
 ### Standard Build
 ```bash
-npm run make
+npm run dist
 ```
 
-Artifacts will be found in the `out/make` directory.
+Artifacts will be found in the `/dist` directory.
 
 ## Distribution
 
