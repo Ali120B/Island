@@ -1,4 +1,4 @@
-# ** Note This(v3.7.0) is the final version of this app, please switch to v2 branch for new updates. **
+# ** Note This(v3.7.0) is the final version of this app, please switch to v2 version from my repos for new updates. **
 
 
 
