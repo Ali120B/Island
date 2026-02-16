@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startDrag: (filePath) => ipcRenderer.send('ondragstart', filePath),
   saveChatHistory: (chat) => ipcRenderer.invoke('save-chat-history', chat),
   getChatHistory: () => ipcRenderer.invoke('get-chat-history'),
+  deleteChatHistoryItem: (id) => ipcRenderer.invoke('delete-chat-history-item', id),
   clearChatHistory: () => ipcRenderer.invoke('clear-chat-history'),
   onDragFinished: (callback) => ipcRenderer.on('drag-finished', (event, path) => callback(path)),
   getClipboardHistory: () => ipcRenderer.invoke('get-clipboard-history'),

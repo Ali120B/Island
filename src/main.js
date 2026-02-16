@@ -381,13 +381,147 @@ ipcMain.handle('open-app', async (event, path) => {
   await shell.openPath(path);
 });
 
+const resolveShortcut = async (filePath) => {
+  try {
+    if (!filePath || !filePath.toLowerCase().endsWith('.lnk')) {
+        return filePath;
+    }
+    
+    // Try Electron's built-in shell.readShortcutLink first (fastest)
+    try {
+        const shortcutDetails = shell.readShortcutLink(filePath);
+        if (shortcutDetails && shortcutDetails.target) {
+            console.log(`[Main] Electron resolved shortcut: ${filePath} -> ${shortcutDetails.target}`);
+            return shortcutDetails.target;
+        }
+    } catch (e) {
+        // Electron API might fail on some shortcut types, continue to PowerShell
+        console.log('[Main] shell.readShortcutLink failed, falling back to PowerShell');
+    }
+
+    return new Promise((resolve) => {
+        const psScript = `
+$ErrorActionPreference = 'SilentlyContinue'
+$path = '${filePath.replace(/'/g, "''")}'
+try {
+    $sh = New-Object -ComObject WScript.Shell
+    $shortcut = $sh.CreateShortcut($path)
+    if ($shortcut.TargetPath) {
+        Write-Output $shortcut.TargetPath
+    } else {
+        Write-Output $path
+    }
+} catch {
+    Write-Output $path
+}
+`;
+        const tempPath = path.join(app.getPath('userData'), `resolve-${Date.now()}-${Math.floor(Math.random() * 1000)}.ps1`);
+        try {
+            fs.writeFileSync(tempPath, psScript);
+        } catch (e) {
+            return resolve(filePath);
+        }
+
+        exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempPath}"`, { timeout: 2000 }, (err, stdout, stderr) => {
+            try { fs.unlinkSync(tempPath); } catch { }
+            if (err || !stdout || !stdout.trim()) {
+                resolve(filePath);
+            } else {
+                resolve(stdout.trim());
+            }
+        });
+    });
+  } catch (e) {
+    console.error('[Main] Error resolving shortcut:', e);
+    return filePath;
+  }
+};
+
+const getIconFromPowerShell = async (filePath) => {
+  return new Promise((resolve) => {
+    // Basic script to extract icon and return as base64
+    // Using simple ExtractAssociatedIcon which works for most files
+    const psScript = `
+$ErrorActionPreference = 'Stop'
+try {
+    Add-Type -AssemblyName System.Drawing
+    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon('${filePath.replace(/'/g, "''")}')
+    if ($icon) {
+        $bitmap = $icon.ToBitmap()
+        $stream = New-Object System.IO.MemoryStream
+        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+        $bytes = $stream.ToArray()
+        $base64 = [Convert]::ToBase64String($bytes)
+        Write-Output "data:image/png;base64,$base64"
+    } else {
+        Write-Output "null"
+    }
+} catch {
+    Write-Output "null"
+}
+`;
+    const tempPath = path.join(app.getPath('userData'), `icon-${Date.now()}-${Math.floor(Math.random() * 1000)}.ps1`);
+    try {
+        fs.writeFileSync(tempPath, psScript);
+    } catch (e) {
+        return resolve(null);
+    }
+
+    exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempPath}"`, { timeout: 3000 }, (err, stdout, stderr) => {
+        try { fs.unlinkSync(tempPath); } catch { }
+        if (err || !stdout || stdout.trim() === 'null') {
+            resolve(null);
+        } else {
+            resolve(stdout.trim());
+        }
+    });
+  });
+};
+
 ipcMain.handle('get-app-icon', async (event, filePath) => {
   try {
-    const icon = await app.getFileIcon(filePath);
-    return icon.toDataURL();
+    let targetPath = filePath;
+    let fallbackPath = filePath;
+
+    if (filePath.toLowerCase().endsWith('.lnk')) {
+        try {
+            const details = shell.readShortcutLink(filePath);
+            if (details) {
+                if (details.icon) {
+                    console.log(`[Main] Using shortcut icon: ${details.icon}`);
+                    targetPath = details.icon;
+                } else if (details.target) {
+                    console.log(`[Main] Using shortcut target: ${details.target}`);
+                    targetPath = details.target;
+                    fallbackPath = details.target;
+                }
+            }
+        } catch (e) {
+            console.error('[Main] Failed to read shortcut details:', e);
+            // Fallback to resolving via PowerShell if native fails
+            const resolved = await resolveShortcut(filePath);
+            if (resolved && resolved !== filePath) {
+                targetPath = resolved;
+                fallbackPath = resolved;
+            }
+        }
+    }
+
+    console.log(`[Main] Getting icon for: ${filePath} -> Target: ${targetPath}`);
+
+    // 1. Try Electron native API first
+    const icon = await app.getFileIcon(targetPath, { size: 'large' });
+    if (!icon.isEmpty()) {
+        return icon.toDataURL();
+    }
+    
+    // 2. Fallback to PowerShell if native API fails or returns empty
+    console.log('[Main] Falling back to PowerShell for icon:', fallbackPath);
+    return await getIconFromPowerShell(fallbackPath);
   } catch (e) {
     console.error('Error getting icon:', e);
-    return null;
+    // 3. Fallback to PowerShell on error
+    return await getIconFromPowerShell(filePath);
   }
 });
 
@@ -703,7 +837,7 @@ const getChatHistoryPath = () => {
   return path.join(historyDir, 'history.json');
 };
 
-ipcMain.handle('save-chat-history', async (event, chat) => {
+ipcMain.handle('save-chat-history', async (event, session) => {
   try {
     const historyPath = getChatHistoryPath();
     let history = [];
@@ -716,12 +850,19 @@ ipcMain.handle('save-chat-history', async (event, chat) => {
       }
     }
 
-    // Add new chat
-    history.push({
-      id: Date.now().toString(),
-      timestamp: Date.now(),
-      ...chat
-    });
+    const existingIndex = history.findIndex(h => h.id === session.id);
+    if (existingIndex >= 0) {
+      history[existingIndex] = {
+        ...history[existingIndex],
+        ...session,
+        timestamp: Date.now() // Update timestamp to show as recent
+      };
+    } else {
+      history.push({
+        ...session,
+        timestamp: Date.now()
+      });
+    }
 
     fs.writeFileSync(historyPath, JSON.stringify(history, null, 2));
     return true;
@@ -742,6 +883,23 @@ ipcMain.handle('get-chat-history', async () => {
   } catch (err) {
     console.error("Error getting chat history:", err);
     return [];
+  }
+});
+
+ipcMain.handle('delete-chat-history-item', async (event, id) => {
+  try {
+    const historyPath = getChatHistoryPath();
+    if (fs.existsSync(historyPath)) {
+      const data = fs.readFileSync(historyPath, 'utf8');
+      let history = JSON.parse(data);
+      history = history.filter(item => item.id !== id);
+      fs.writeFileSync(historyPath, JSON.stringify(history, null, 2));
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error("Error deleting chat history item:", err);
+    return false;
   }
 });
 

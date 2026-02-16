@@ -295,13 +295,63 @@ export default function Island() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState(null);
   
   const [appShortcuts, setAppShortcuts] = useState(() => {
     const saved = localStorage.getItem("island-app-shortcuts");
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Auto-refresh missing icons on load
+  useEffect(() => {
+    const refreshIcons = async () => {
+        if (!window.electronAPI?.getAppIcon) return;
+        
+        // Use a functional update or access current state if needed, 
+        // but for mount effect, using the initial appShortcuts is fine.
+        // We need to be careful not to create a race condition if user edits while this runs.
+        // But since it runs on mount, it's likely fine.
+        
+        let updates = [...appShortcuts];
+        let hasChanges = false;
+        
+        for (let i = 0; i < updates.length; i++) {
+            if (!updates[i].icon && updates[i].path) {
+                try {
+                    console.log("Refreshing icon for:", updates[i].name);
+                    const icon = await window.electronAPI.getAppIcon(updates[i].path);
+                    if (icon) {
+                        updates[i].icon = icon;
+                        hasChanges = true;
+                    }
+                } catch (e) {
+                    console.error("Failed to refresh icon:", e);
+                }
+            }
+        }
+        
+        if (hasChanges) {
+            setAppShortcuts(prev => {
+                // Merge with current state to avoid overwriting new changes
+                const newState = [...prev];
+                updates.forEach((u, idx) => {
+                    if (u.icon && newState[idx] && newState[idx].path === u.path) {
+                        newState[idx].icon = u.icon;
+                    }
+                });
+                return newState;
+            });
+        }
+    };
+    
+    if (appShortcuts.length > 0) {
+        refreshIcons();
+    }
+  }, []);
+
   const [showAppShortcutModal, setShowAppShortcutModal] = useState(false);
   const [newAppPath, setNewAppPath] = useState('');
+  const [isEditingApps, setIsEditingApps] = useState(false);
 
   useEffect(() => {
     if (window.electronAPI?.onUpdateDownloaded) {
@@ -453,6 +503,15 @@ export default function Island() {
   useEffect(() => {
     if (mode !== 'large' || view !== 'search_urls') {
       setIsEditingUrls(false);
+    }
+    // Auto-close app edit mode when leaving the view or collapsing
+    if (mode !== 'large' || view !== 'app_shortcuts') {
+      setIsEditingApps(false);
+    }
+    // Reset calendar month when collapsing
+    if (mode !== 'large') {
+        const d = new Date();
+        setCalendarMonth(new Date(d.getFullYear(), d.getMonth(), 1));
     }
   }, [mode, view]);
 
@@ -791,7 +850,9 @@ export default function Island() {
 
   const handleNewChat = () => {
     setMessages([]);
+    setUserText("");
     setShowHistory(false);
+    setActiveSessionId(null);
   };
 
   // Dropbox state and refresh removed
@@ -1226,18 +1287,33 @@ export default function Island() {
         }
       });
 
-      const stream = await openai.chat.completions.create({
-        model: aiModel === 'custom' ? customModel : aiModel,
-        messages: [
+      // Construct messages for API
+      // We should include history context but exclude the just-added placeholders (which are async state updates anyway)
+      // The 'messages' variable here is from the render scope, so it doesn't include the lines we just called setMessages for.
+      // So 'messages' is exactly the history we want.
+      
+      const apiMessages = [
+          ...messages.map(m => ({ role: m.role, content: m.content })),
           {
             role: "user",
             content: `Users question: ${currentQuestion}. Answer the users question in a short paragraph, 3-4 sentences. If the question is straight forward answer the question in a short 2 sentences.`
           }
-        ],
+      ];
+
+      const stream = await openai.chat.completions.create({
+        model: aiModel === 'custom' ? customModel : aiModel,
+        messages: apiMessages,
         stream: true,
       });
 
       let fullText = "";
+
+      // Determine or create session ID
+      let sessionId = activeSessionId;
+      if (!sessionId) {
+          sessionId = Date.now().toString();
+          setActiveSessionId(sessionId);
+      }
 
       for await (const chunk of stream) {
         const delta = chunk?.choices?.[0]?.delta?.content || "";
@@ -1261,11 +1337,28 @@ export default function Island() {
           return newHistory;
         });
       } else {
-        // Save to history
+        // Save to history (save the entire session)
         if (window.electronAPI?.saveChatHistory) {
+          // Construct the full session object
+          // We need the latest messages state, which includes the new response.
+          // Since setMessages is async, we can't trust 'messages' variable here to have the very last update immediately.
+          // However, we can reconstruct it from 'messages' + the new response.
+          // Wait, 'messages' variable in this closure is stale (from render start).
+          // We need to use functional update to get previous messages, but we can't get the result out easily.
+          // Better approach: We know 'messages' (at start of fn) + user msg + assistant msg.
+          
+          const updatedMessages = [
+              ...messages, 
+              { role: 'user', content: currentQuestion }, 
+              { role: 'assistant', content: fullText }
+          ];
+          
+          const sessionTitle = messages.length === 0 ? currentQuestion : (messages[0].content || currentQuestion);
+
           await window.electronAPI.saveChatHistory({
-            question: currentQuestion,
-            answer: fullText
+            id: sessionId,
+            title: sessionTitle.substring(0, 50) + (sessionTitle.length > 50 ? "..." : ""),
+            messages: updatedMessages
           });
         }
       }
@@ -4162,17 +4255,39 @@ export default function Island() {
           <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
             <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>APP SHORTCUTS</div>
           </div>
+          
+          <div 
+            onClick={() => setIsEditingApps(!isEditingApps)}
+            style={{ 
+                position: 'absolute', bottom: 15, left: 20, zIndex: 10, cursor: 'pointer',
+                opacity: isEditingApps ? 1 : 0.4, transition: 'opacity 0.2s',
+                display: 'flex', alignItems: 'center', gap: 5
+            }}
+            title="Manage Shortcuts"
+          >
+            <Settings size={14} color={textColor} />
+          </div>
+
           <div style={{
-            width: '100%', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 15,
-            animation: 'appear 0.3s ease-out', padding: '0 10px', justifyItems: 'center',
+            width: '100%', 
+            display: appShortcuts.length === 0 ? 'flex' : 'grid', 
+            gridTemplateColumns: appShortcuts.length === 0 ? 'unset' : 'repeat(4, 1fr)', 
+            gap: 15,
+            animation: 'appear 0.3s ease-out', 
+            padding: '0 10px', 
+            justifyItems: 'center',
+            alignItems: 'center',
+            justifyContent: 'center',
             maxHeight: '260px', overflowY: 'auto', marginTop: 20
           }}>
             {appShortcuts.map((app, idx) => (
                 <div key={idx} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
                     <div
                         onClick={() => {
-                             window.electronAPI?.openApp ? window.electronAPI.openApp(app.path) : console.log("Open", app.path);
-                             setView('home');
+                             if (!isEditingApps) {
+                                window.electronAPI?.openApp ? window.electronAPI.openApp(app.path) : console.log("Open", app.path);
+                                setView('home');
+                             }
                         }}
                         onContextMenu={(e) => {
                             e.preventDefault();
@@ -4182,10 +4297,11 @@ export default function Island() {
                         style={{
                             width: 50, height: 50, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
                             background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            transition: 'all 0.2s ease', position: 'relative'
+                            transition: 'all 0.2s ease', position: 'relative',
+                            opacity: isEditingApps ? 0.8 : 1
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                        onMouseEnter={(e) => !isEditingApps && (e.currentTarget.style.transform = 'scale(1.1)')}
+                        onMouseLeave={(e) => !isEditingApps && (e.currentTarget.style.transform = 'scale(1)')}
                     >
                        {app.icon ? (
                            <img src={app.icon} alt={app.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -4193,6 +4309,34 @@ export default function Island() {
                            <Box size={20} color={textColor} />
                        )}
                     </div>
+                    
+                    {isEditingApps && (
+                       <div
+                         onClick={(e) => {
+                           e.stopPropagation(); 
+                           const newApps = appShortcuts.filter((_, i) => i !== idx);
+                           setAppShortcuts(newApps);
+                         }}
+                         style={{
+                           position: 'absolute', top: -6, right: -6, 
+                           zIndex: 20, cursor: 'pointer',
+                           color: 'rgba(255,255,255,0.6)',
+                           transition: 'all 0.2s ease',
+                           padding: 2
+                         }}
+                         onMouseEnter={(e) => {
+                            e.currentTarget.style.color = '#ef4444';
+                            e.currentTarget.style.filter = 'drop-shadow(0 0 2px rgba(239, 68, 68, 0.5))';
+                         }}
+                         onMouseLeave={(e) => {
+                            e.currentTarget.style.color = 'rgba(255,255,255,0.6)';
+                            e.currentTarget.style.filter = 'none';
+                         }}
+                       >
+                         <X size={12} strokeWidth={3} />
+                       </div>
+                    )}
+
                     <span style={{ fontSize: 10, opacity: 0.7, maxWidth: 60, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{app.name}</span>
                 </div>
             ))}
@@ -4279,22 +4423,24 @@ export default function Island() {
               </div>
             )}
             
-            <div
-                onClick={() => setShowAppShortcutModal(true)}
-                style={{
-                    width: 50, height: 50, borderRadius: 12, cursor: 'pointer',
-                    background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'all 0.2s ease', border: '1px dashed rgba(255,255,255,0.2)'
-                }}
-                onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = '0 0 15px rgba(255,255,255,0.1)';
-                }}
-                onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = 'none';
-                }}
-            >
-                <Plus size={20} color={textColor} opacity={0.5} />
-            </div>
+            {appShortcuts.length < 12 && (
+                <div
+                    onClick={() => setShowAppShortcutModal(true)}
+                    style={{
+                        width: 50, height: 50, borderRadius: 12, cursor: 'pointer',
+                        background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.2s ease', border: '1px dashed rgba(255,255,255,0.2)'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = '0 0 15px rgba(255,255,255,0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = 'none';
+                    }}
+                >
+                    <Plus size={20} color={textColor} opacity={0.5} />
+                </div>
+            )}
           </div>
         </div>
 
@@ -4352,13 +4498,57 @@ export default function Island() {
                   <div style={{ fontSize: 12, opacity: 0.5, textAlign: 'center', marginTop: 20 }}>No history</div>
                 ) : (
                   chatHistory.slice().reverse().map((chat) => (
-                    <div key={chat.id} style={{
-                      marginBottom: 12, fontSize: 12, padding: 10, borderRadius: 10,
-                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)'
-                    }}>
+                    <div key={chat.id} 
+                      onClick={() => {
+                        // Load full session
+                        if (chat.messages && Array.isArray(chat.messages)) {
+                          setMessages(chat.messages);
+                        } else {
+                           // Fallback for old history format
+                           setMessages([
+                             { role: 'user', content: chat.question },
+                             { role: 'assistant', content: chat.answer }
+                           ]);
+                        }
+                        setActiveSessionId(chat.id);
+                        setShowHistory(false);
+                      }}
+                      style={{
+                        marginBottom: 12, fontSize: 12, padding: 10, borderRadius: 10,
+                        background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)',
+                        position: 'relative',
+                        paddingRight: 30,
+                        cursor: 'pointer',
+                        transition: 'background 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                    >
+                      <div
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (window.electronAPI?.deleteChatHistoryItem) {
+                            await window.electronAPI.deleteChatHistoryItem(chat.id);
+                          }
+                          const newHistory = chatHistory.filter(c => c.id !== chat.id);
+                          setChatHistory(newHistory);
+                        }}
+                        style={{
+                          position: 'absolute', top: 8, right: 8, cursor: 'pointer', opacity: 0.4,
+                          transition: 'opacity 0.2s ease', padding: 2
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.4'}
+                      >
+                        <X size={12} color="#ef4444" />
+                      </div>
                       <div style={{ opacity: 0.5, fontSize: 10, marginBottom: 4 }}>{new Date(chat.timestamp).toLocaleString()}</div>
-                      <div style={{ fontWeight: 600, marginBottom: 2 }}>Q: {chat.question}</div>
-                      <div style={{ opacity: 0.8 }}>A: {chat.answer.substring(0, 100)}...</div>
+                      <div style={{ fontWeight: 600, marginBottom: 2 }}>{chat.title || chat.question}</div>
+                      <div style={{ opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                         {chat.messages && chat.messages.length > 0 
+                             ? chat.messages[chat.messages.length - 1].content.substring(0, 50) + "..."
+                             : (chat.answer ? chat.answer.substring(0, 50) + "..." : "")}
+                      </div>
                     </div>
                   ))
                 )}
@@ -4604,17 +4794,17 @@ export default function Island() {
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10, display: 'flex', alignItems: 'center', gap: 15 }}>
             <div
               onClick={() => setView('todo_calendar')}
-              style={{ cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.2s ease', display: 'flex', alignItems: 'center', gap: 8 }}
+              style={{ cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.2s ease', display: 'flex', alignItems: 'center', gap: 6 }}
               onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
               onMouseLeave={(e) => e.currentTarget.style.opacity = '0.4'}
             >
-              <ChevronLeft size={18} color={textColor} />
-              <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.6, letterSpacing: 1.4 }}>EVENTS</div>
+              <ChevronLeft size={14} color={textColor} />
+              <div style={{ fontSize: 9, fontWeight: 800, opacity: 0.6, letterSpacing: 1.4 }}>EVENTS</div>
             </div>
-            <div style={{ fontSize: 13, fontWeight: 800, opacity: 0.9 }}>{selectedCalendarDate}</div>
+            <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.9 }}>{selectedCalendarDate}</div>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 5 }}>
