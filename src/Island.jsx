@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Component } from 'react';
-import { Home, Music, MessageSquare, Cloud, Battery, BatteryLow, BatteryMedium, BatteryFull, Zap, ChevronLeft, ChevronRight, Sun, Moon, Box, Search, History, Trash2, X, Clipboard as ClipboardIcon, Volume2, VolumeX, Wind, Droplets, Thermometer, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Timer as TimerIcon, Pin, CloudRain, Plus, List, Edit2, Settings, Check, GripVertical, Calendar, LayoutGrid, Folder } from 'lucide-react';
+import { Home, Music, MessageSquare, Cloud, Battery, BatteryLow, BatteryMedium, BatteryFull, Zap, ChevronLeft, ChevronRight, Sun, Moon, Box, Search, History, Trash2, X, Clipboard as ClipboardIcon, Volume2, VolumeX, Wind, Droplets, Thermometer, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Timer as TimerIcon, Pin, CloudRain, Plus, List, Edit2, Settings, Check, GripVertical, Calendar } from 'lucide-react';
 import { OpenAI } from "openai";
 import "./App.css";
 import lowBatteryIcon from "./assets/images/lowbattery.png";
@@ -18,14 +18,6 @@ function formatDateShort(input) {
   return `${weekday}, ${month} ${day}`;
 }
 
-function openApp(app) {
-  if (!app) return;
-  try {
-    window.location.href = `${app}://`;
-  } catch (e) {
-    window.alert("Failed to open app:", app, e);
-  }
-}
 
 const AnalogClock = ({ size = 150, color = "#fff", style = "simple" }) => {
   const [now, setNow] = useState(new Date());
@@ -237,6 +229,7 @@ export default function Island() {
   const [showWatchInIdle, setShowWatchInIdle] = useState(localStorage.getItem("show-watch-idle") !== "false");
   const [showTimerBorder, setShowTimerBorder] = useState(localStorage.getItem("show-timer-border") !== "false");
   const [timerBorderColor, setTimerBorderColor] = useState(localStorage.getItem("timer-border-color") || "#FAFAFA");
+  const [notchModeEnabled, setNotchModeEnabled] = useState(localStorage.getItem("notch-mode") === "true");
   const [scrollValue, setScrollValue] = useState(0); // For the visual bar
   const [showScrollOverlay, setShowScrollOverlay] = useState(false);
   const overlayTimeout = useRef(null);
@@ -299,78 +292,11 @@ export default function Island() {
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState(null);
   
-  const [appShortcuts, setAppShortcuts] = useState(() => {
-    const saved = localStorage.getItem("island-app-shortcuts");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // Auto-refresh missing icons on load
-  useEffect(() => {
-    const refreshIcons = async () => {
-        if (!window.electronAPI?.getAppIcon) return;
-        
-        // Use a functional update or access current state if needed, 
-        // but for mount effect, using the initial appShortcuts is fine.
-        // We need to be careful not to create a race condition if user edits while this runs.
-        // But since it runs on mount, it's likely fine.
-        
-        let updates = [...appShortcuts];
-        let hasChanges = false;
-        
-        for (let i = 0; i < updates.length; i++) {
-            if (!updates[i].icon && updates[i].path) {
-                try {
-                    console.log("Refreshing icon for:", updates[i].name);
-                    const icon = await window.electronAPI.getAppIcon(updates[i].path);
-                    if (icon) {
-                        updates[i].icon = icon;
-                        hasChanges = true;
-                    }
-                } catch (e) {
-                    console.error("Failed to refresh icon:", e);
-                }
-            }
-        }
-        
-        if (hasChanges) {
-            setAppShortcuts(prev => {
-                // Merge with current state to avoid overwriting new changes
-                const newState = [...prev];
-                updates.forEach((u, idx) => {
-                    if (u.icon && newState[idx] && newState[idx].path === u.path) {
-                        newState[idx].icon = u.icon;
-                    }
-                });
-                return newState;
-            });
-        }
-    };
-    
-    if (appShortcuts.length > 0) {
-        refreshIcons();
-    }
-  }, []);
-
-  const [showAppShortcutModal, setShowAppShortcutModal] = useState(false);
-  const [newAppPath, setNewAppPath] = useState('');
-  const [isEditingApps, setIsEditingApps] = useState(false);
-
-  useEffect(() => {
-    if (window.electronAPI?.onUpdateDownloaded) {
-      window.electronAPI.onUpdateDownloaded(() => {
-        setUpdateDownloaded(true);
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("island-app-shortcuts", JSON.stringify(appShortcuts));
-  }, [appShortcuts]);
   
   const [layoutOrder, setLayoutOrder] = useState(() => {
     const saved = localStorage.getItem("island-layout-order");
     const defaultOrder = {
-      pages: ['weather', 'app_shortcuts', 'search', 'home', 'music', 'ai', 'todo'],
+      pages: ['weather', 'search', 'home', 'music', 'ai', 'todo'],
       hiddenPages: [],
       home: ['clipboard', 'dropbox'],
       todo: ['calendar', 'timer'],
@@ -391,13 +317,9 @@ export default function Island() {
     if (hiddenPages.includes('bluetooth')) {
         hiddenPages = hiddenPages.filter(p => p !== 'bluetooth');
     }
+    pages = pages.filter(p => p !== 'app_shortcuts');
+    hiddenPages = hiddenPages.filter(p => p !== 'app_shortcuts');
 
-    if (!pages.includes('app_shortcuts') && !hiddenPages.includes('app_shortcuts')) {
-       // Add app_shortcuts left of search
-       const searchIdx = pages.indexOf('search');
-       if (searchIdx !== -1) pages.splice(searchIdx, 0, 'app_shortcuts');
-       else pages.push('app_shortcuts');
-    }
 
     // Ensure all keys exist
     return {
@@ -505,10 +427,6 @@ export default function Island() {
   useEffect(() => {
     if (mode !== 'large' || view !== 'search_urls') {
       setIsEditingUrls(false);
-    }
-    // Auto-close app edit mode when leaving the view or collapsing
-    if (mode !== 'large' || view !== 'app_shortcuts') {
-      setIsEditingApps(false);
     }
     // Reset calendar month when collapsing
     if (mode !== 'large') {
@@ -1051,7 +969,6 @@ export default function Island() {
         case 'todo_calendar_events': return { width: 430, height: 340 };
         case 'weather': return { width: 350, height: 220 };
         case 'weather_details': return { width: 350, height: 200 };
-        case 'app_shortcuts': return { width: 420, height: 340 };
         case 'search_urls': return { width: 400, height: 210 };
         case 'search':
           if (embeddedWebUrl) return { width: 760, height: 540 };
@@ -1205,6 +1122,7 @@ export default function Island() {
       setShowWatchInIdle(localStorage.getItem("show-watch-idle") !== "false");
       setShowTimerBorder(localStorage.getItem("show-timer-border") !== "false");
       setTimerBorderColor(localStorage.getItem("timer-border-color") || "#FAFAFA");
+      setNotchModeEnabled(localStorage.getItem("notch-mode") === "true");
     };
 
     syncSettings();
@@ -1909,7 +1827,7 @@ export default function Island() {
         if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false, false);
         setLastInteraction(Date.now());
       }}
-      className={`island-container ${mode}`}
+      className={`island-container ${mode} ${notchModeEnabled ? 'notch-mode' : ''}`}
       onMouseEnter={() => {
         isMouseOver.current = true;
         if (mode !== "large") setMode("quick");
@@ -1971,14 +1889,15 @@ export default function Island() {
           theme === "win95"
             ? "#FFFFFF #808080 #808080 #FFFFFF"
             : "none",
-        borderRadius:
-          mode === "large" && theme === "win95"
+        borderRadius: notchModeEnabled
+          ? (mode === 'large' ? '28px 28px 20px 20px' : mode === 'quick' ? '24px 24px 18px 18px' : '22px 22px 16px 16px')
+          : (mode === "large" && theme === "win95"
             ? 0
             : (mode === "large" || mode === "quick")
               ? cornerRadius
               : theme === "win95"
                 ? 0
-                : 16,
+                : 16),
         boxShadow: hideNotActiveIslandEnabled && mode === 'still' ? "none" : '2px 2px 30px rgba(0, 0, 0, 0.07)',
         backgroundColor: (view === 'weather' || view === 'weather_details')
           ? (getWeatherStyles().bgColor.includes('gradient') ? 'transparent' : getWeatherStyles().bgColor)
@@ -2378,7 +2297,6 @@ export default function Island() {
                     case 'music': return <Music size={14} color={textColor} />;
                     case 'ai': return <MessageSquare size={14} color={textColor} />;
                     case 'todo': return <List size={14} color={textColor} />;
-                    case 'app_shortcuts': return <LayoutGrid size={14} color={textColor} />;
                     default: return <ChevronLeft size={14} color={textColor} />;
                   }
                 }
@@ -2424,7 +2342,6 @@ export default function Island() {
                     case 'music': return <Music size={14} color={textColor} />;
                     case 'ai': return <MessageSquare size={14} color={textColor} />;
                     case 'todo': return <List size={14} color={textColor} />;
-                    case 'app_shortcuts': return <LayoutGrid size={14} color={textColor} />;
                     default: return <ChevronRight size={14} color={textColor} />;
                   }
                 }
@@ -2936,7 +2853,7 @@ export default function Island() {
                                   }}
                                 >
                                   <GripVertical size={10} style={{ opacity: 0.4 }} />
-                                  {page === 'app_shortcuts' ? 'App Shortcuts' : page.charAt(0).toUpperCase() + page.slice(1)}
+                                  {page.charAt(0).toUpperCase() + page.slice(1)}
                                 </div>
                               ))}
                             </div>
@@ -2998,7 +2915,7 @@ export default function Island() {
                                   }}
                                 >
                                   <GripVertical size={8} style={{ opacity: 0.3 }} />
-                                  {page === 'app_shortcuts' ? 'App Shortcuts' : page.charAt(0).toUpperCase() + page.slice(1)}
+                                  {page.charAt(0).toUpperCase() + page.slice(1)}
                                 </div>
                               ))}
                               {layoutOrder.hiddenPages.length === 0 && (
@@ -4307,208 +4224,6 @@ export default function Island() {
         </div>
 
 
-
-        {/* App Shortcuts View */}
-        <div style={{
-          position: 'absolute', inset: 0, width: '100%', height: '100%',
-          opacity: (view === 'app_shortcuts' && mode === 'large') ? 1 : 0,
-          pointerEvents: (view === 'app_shortcuts' && mode === 'large') ? 'auto' : 'none',
-          transform: getHorizontalTransform('app_shortcuts'),
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          padding: '20px'
-        }}>
-          <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>APP SHORTCUTS</div>
-          </div>
-          
-          <div 
-            onClick={() => setIsEditingApps(!isEditingApps)}
-            style={{ 
-                position: 'absolute', bottom: 15, left: 20, zIndex: 10, cursor: 'pointer',
-                opacity: isEditingApps ? 1 : 0.4, transition: 'opacity 0.2s',
-                display: 'flex', alignItems: 'center', gap: 5
-            }}
-            title="Manage Shortcuts"
-          >
-            <Settings size={14} color={textColor} />
-          </div>
-
-          <div style={{
-            width: '100%', 
-            display: appShortcuts.length === 0 ? 'flex' : 'grid', 
-            gridTemplateColumns: appShortcuts.length === 0 ? 'unset' : 'repeat(4, 1fr)', 
-            gap: 15,
-            animation: 'appear 0.3s ease-out', 
-            padding: '0 10px', 
-            justifyItems: 'center',
-            alignItems: 'center',
-            justifyContent: 'center',
-            maxHeight: '260px', overflowY: 'auto', marginTop: 20
-          }}>
-            {appShortcuts.map((app, idx) => (
-                <div key={idx} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-                    <div
-                        onClick={() => {
-                             if (!isEditingApps) {
-                                window.electronAPI?.openApp ? window.electronAPI.openApp(app.path) : console.log("Open", app.path);
-                                setView('home');
-                             }
-                        }}
-                        onContextMenu={(e) => {
-                            e.preventDefault();
-                            const newApps = appShortcuts.filter((_, i) => i !== idx);
-                            setAppShortcuts(newApps);
-                        }}
-                        style={{
-                            width: 50, height: 50, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
-                            background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            transition: 'all 0.2s ease', position: 'relative',
-                            opacity: isEditingApps ? 0.8 : 1
-                        }}
-                        onMouseEnter={(e) => !isEditingApps && (e.currentTarget.style.transform = 'scale(1.1)')}
-                        onMouseLeave={(e) => !isEditingApps && (e.currentTarget.style.transform = 'scale(1)')}
-                    >
-                       {app.icon ? (
-                           <img src={app.icon} alt={app.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                       ) : (
-                           <Box size={20} color={textColor} />
-                       )}
-                    </div>
-                    
-                    {isEditingApps && (
-                       <div
-                         onClick={(e) => {
-                           e.stopPropagation(); 
-                           const newApps = appShortcuts.filter((_, i) => i !== idx);
-                           setAppShortcuts(newApps);
-                         }}
-                         style={{
-                           position: 'absolute', top: -6, right: -6, 
-                           zIndex: 20, cursor: 'pointer',
-                           color: 'rgba(255,255,255,0.6)',
-                           transition: 'all 0.2s ease',
-                           padding: 2
-                         }}
-                         onMouseEnter={(e) => {
-                            e.currentTarget.style.color = '#ef4444';
-                            e.currentTarget.style.filter = 'drop-shadow(0 0 2px rgba(239, 68, 68, 0.5))';
-                         }}
-                         onMouseLeave={(e) => {
-                            e.currentTarget.style.color = 'rgba(255,255,255,0.6)';
-                            e.currentTarget.style.filter = 'none';
-                         }}
-                       >
-                         <X size={12} strokeWidth={3} />
-                       </div>
-                    )}
-
-                    <span style={{ fontSize: 10, opacity: 0.7, maxWidth: 60, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{app.name}</span>
-                </div>
-            ))}
-            
-            {/* App Shortcut Options Modal */}
-            {showAppShortcutModal && (
-              <div style={{
-                position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.85)', borderRadius: 15, zIndex: 100,
-                display: 'flex', flexDirection: 'column', padding: '20px', backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-                justifyContent: 'center', gap: 15
-              }}>
-                <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5, textAlign: 'center' }}>
-                  ADD SHORTCUT
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                   <div
-                      onClick={async () => {
-                          if (window.electronAPI?.selectFile) {
-                              const path = await window.electronAPI.selectFile();
-                              if (path) {
-                                  // Get icon
-                                  let icon = null;
-                                  if (window.electronAPI?.getAppIcon) {
-                                      icon = await window.electronAPI.getAppIcon(path);
-                                  }
-                                  // Extract name from path (last part, remove extension)
-                                  const name = path.split('\\').pop().split('/').pop().replace(/\.[^/.]+$/, "");
-                                  setAppShortcuts([...appShortcuts, { name, path, icon }]);
-                                  setShowAppShortcutModal(false);
-                              }
-                          }
-                      }}
-                      style={{
-                          padding: '12px', borderRadius: 12, background: 'rgba(255, 255, 255, 0.08)',
-                          color: '#ffffff', fontSize: 13, fontWeight: 500, textAlign: 'center', cursor: 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                          transition: 'background 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
-                   >
-                      <Folder size={16} /> Find File...
-                   </div>
-                   
-                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: 0.5 }}>
-                      <div style={{ flex: 1, height: 1, background: 'white' }} />
-                      <span style={{ fontSize: 10 }}>OR</span>
-                      <div style={{ flex: 1, height: 1, background: 'white' }} />
-                   </div>
-
-                   <input
-                      type="text"
-                      placeholder="Enter Path (e.g. C:\Windows\System32\notepad.exe)"
-                      value={newAppPath}
-                      onChange={(e) => setNewAppPath(e.target.value)}
-                      onKeyDown={async (e) => {
-                          if (e.key === 'Enter' && newAppPath.trim()) {
-                              const path = newAppPath.trim();
-                              let icon = null;
-                              if (window.electronAPI?.getAppIcon) {
-                                  icon = await window.electronAPI.getAppIcon(path);
-                              }
-                              const name = path.split('\\').pop().split('/').pop().replace(/\.[^/.]+$/, "");
-                              setAppShortcuts([...appShortcuts, { name, path, icon }]);
-                              setShowAppShortcutModal(false);
-                              setNewAppPath('');
-                          }
-                      }}
-                      style={{ padding: '10px 15px', borderRadius: 12, border: 'none', outline: 'none', background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: 13 }}
-                   />
-                </div>
-
-                <div
-                  onClick={() => {
-                    setShowAppShortcutModal(false);
-                    setNewAppPath('');
-                  }}
-                  style={{ padding: '10px', borderRadius: 12, background: 'rgba(239, 68, 68, 0.14)', color: '#ef4444', fontSize: 12, fontWeight: 800, textAlign: 'center', cursor: 'pointer', marginTop: 5 }}
-                >
-                  CANCEL
-                </div>
-              </div>
-            )}
-            
-            {appShortcuts.length < 12 && (
-                <div
-                    onClick={() => setShowAppShortcutModal(true)}
-                    style={{
-                        width: 50, height: 50, borderRadius: 12, cursor: 'pointer',
-                        background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all 0.2s ease', border: '1px dashed rgba(255,255,255,0.2)'
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.boxShadow = '0 0 15px rgba(255,255,255,0.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.boxShadow = 'none';
-                    }}
-                >
-                    <Plus size={20} color={textColor} opacity={0.5} />
-                </div>
-            )}
-          </div>
-        </div>
 
         {/* AI Chat View */}
         <div style={{

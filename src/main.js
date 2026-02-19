@@ -3,6 +3,7 @@ const { app, BrowserWindow, screen, ipcMain, shell, Tray, Menu, nativeImage, cli
 const { autoUpdater } = require("electron-updater");
 const path = require("node:path");
 const fs = require("fs");
+const http = require("node:http");
 const { exec } = require('child_process');
 
 // Disable autoplay restrictions
@@ -13,6 +14,48 @@ let tray = null;
 let mainWindow = null;
 let settingsWindow = null;
 let updateDownloadedInfo = null;
+
+const getIslandDocumentsDir = () => {
+  const docsDir = path.join(app.getPath('documents'), 'Island');
+  if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir, { recursive: true });
+  return docsDir;
+};
+
+const getSettingsPath = () => path.join(getIslandDocumentsDir(), 'settings.json');
+const getCalendarEventsPath = () => path.join(getIslandDocumentsDir(), 'calendar-events.json');
+const getGoogleTokenPath = () => path.join(getIslandDocumentsDir(), 'google-calendar-token.json');
+
+const readSettings = () => {
+  try {
+    const settingsPath = getSettingsPath();
+    if (!fs.existsSync(settingsPath)) return {};
+    return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  } catch (err) {
+    console.error('[Main] Failed to read settings:', err);
+    return {};
+  }
+};
+
+const readCalendarEvents = () => {
+  try {
+    const eventsPath = getCalendarEventsPath();
+    if (!fs.existsSync(eventsPath)) return {};
+    return JSON.parse(fs.readFileSync(eventsPath, 'utf8'));
+  } catch (err) {
+    console.error('[Main] Failed to read calendar events:', err);
+    return {};
+  }
+};
+
+const writeCalendarEvents = (events) => {
+  try {
+    fs.writeFileSync(getCalendarEventsPath(), JSON.stringify(events, null, 2));
+    return true;
+  } catch (err) {
+    console.error('[Main] Failed to write calendar events:', err);
+    return false;
+  }
+};
 
 ipcMain.handle('get-update-status', () => {
   return updateDownloadedInfo;
@@ -26,6 +69,219 @@ ipcMain.handle('set-ignore-mouse-events', (event, ignore, forward) => {
 
 ipcMain.handle('open-external', async (event, url) => {
   await shell.openExternal(url);
+});
+
+ipcMain.handle('google-calendar-connect', async () => {
+  try {
+    const settings = readSettings();
+    const clientId = settings['google-calendar-client-id'];
+    const clientSecret = settings['google-calendar-client-secret'];
+
+    if (!clientId || !clientSecret) {
+      return {
+        success: false,
+        error: 'Missing Google OAuth Client ID/Secret. Add them in Settings first.'
+      };
+    }
+
+    const authCode = await new Promise((resolve, reject) => {
+      const server = http.createServer((req, res) => {
+        try {
+          const url = new URL(req.url, 'http://127.0.0.1');
+          const code = url.searchParams.get('code');
+          const error = url.searchParams.get('error');
+
+          if (error) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end('<h3>Google Calendar connection failed. You can close this tab.</h3>');
+            server.close();
+            reject(new Error(error));
+            return;
+          }
+
+          if (code) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end('<h3>Google Calendar connected. You can close this tab.</h3>');
+            server.close();
+            resolve(code);
+            return;
+          }
+
+          res.writeHead(400, { 'Content-Type': 'text/html' });
+          res.end('<h3>Invalid callback request.</h3>');
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+      server.listen(0, '127.0.0.1', async () => {
+        const { port } = server.address();
+        const redirectUri = `http://127.0.0.1:${port}`;
+        const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+        authUrl.searchParams.set('client_id', clientId);
+        authUrl.searchParams.set('redirect_uri', redirectUri);
+        authUrl.searchParams.set('response_type', 'code');
+        authUrl.searchParams.set('scope', 'https://www.googleapis.com/auth/calendar.readonly');
+        authUrl.searchParams.set('access_type', 'offline');
+        authUrl.searchParams.set('prompt', 'consent');
+
+        settings['google-calendar-redirect-uri'] = redirectUri;
+        fs.writeFileSync(getSettingsPath(), JSON.stringify(settings, null, 2));
+
+        await shell.openExternal(authUrl.toString());
+      });
+
+      setTimeout(() => {
+        try { server.close(); } catch { }
+        reject(new Error('Timed out waiting for Google authorization.'));
+      }, 180000);
+    });
+
+    const settingsAfterAuth = readSettings();
+    const redirectUri = settingsAfterAuth['google-calendar-redirect-uri'];
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code: authCode,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code'
+      })
+    });
+
+    const tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok) {
+      return { success: false, error: tokenData?.error_description || tokenData?.error || 'Failed to exchange auth code.' };
+    }
+
+    const expiresAt = Date.now() + ((tokenData.expires_in || 3600) * 1000);
+    fs.writeFileSync(getGoogleTokenPath(), JSON.stringify({ ...tokenData, expires_at: expiresAt }, null, 2));
+
+    return { success: true };
+  } catch (err) {
+    console.error('[Main] Google calendar connect failed:', err);
+    return { success: false, error: err.message || 'Google Calendar connection failed.' };
+  }
+});
+
+ipcMain.handle('google-calendar-disconnect', async () => {
+  try {
+    const tokenPath = getGoogleTokenPath();
+    if (fs.existsSync(tokenPath)) fs.unlinkSync(tokenPath);
+    return { success: true };
+  } catch (err) {
+    console.error('[Main] Google calendar disconnect failed:', err);
+    return { success: false, error: err.message || 'Failed to disconnect Google Calendar.' };
+  }
+});
+
+ipcMain.handle('google-calendar-status', async () => {
+  return { connected: fs.existsSync(getGoogleTokenPath()) };
+});
+
+ipcMain.handle('google-calendar-sync', async () => {
+  try {
+    const settings = readSettings();
+    const clientId = settings['google-calendar-client-id'];
+    const clientSecret = settings['google-calendar-client-secret'];
+    const redirectUri = settings['google-calendar-redirect-uri'];
+    const tokenPath = getGoogleTokenPath();
+
+    if (!fs.existsSync(tokenPath)) {
+      return { success: false, error: 'Google Calendar is not connected.' };
+    }
+
+    const tokenData = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+    let accessToken = tokenData.access_token;
+
+    if (!accessToken || (tokenData.expires_at && Date.now() > tokenData.expires_at - 30000)) {
+      if (!tokenData.refresh_token) {
+        return { success: false, error: 'Google token expired and no refresh token was found. Reconnect required.' };
+      }
+
+      const refreshed = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          refresh_token: tokenData.refresh_token,
+          grant_type: 'refresh_token',
+          redirect_uri: redirectUri
+        })
+      });
+
+      const refreshData = await refreshed.json();
+      if (!refreshed.ok) {
+        return { success: false, error: refreshData?.error_description || 'Failed to refresh Google token.' };
+      }
+
+      accessToken = refreshData.access_token;
+      const updated = {
+        ...tokenData,
+        ...refreshData,
+        refresh_token: tokenData.refresh_token,
+        expires_at: Date.now() + ((refreshData.expires_in || 3600) * 1000)
+      };
+      fs.writeFileSync(tokenPath, JSON.stringify(updated, null, 2));
+    }
+
+    const nowIso = new Date().toISOString();
+    const eventsRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(nowIso)}&maxResults=20`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+
+    const eventsData = await eventsRes.json();
+    if (!eventsRes.ok) {
+      return { success: false, error: eventsData?.error?.message || 'Failed to fetch Google Calendar events.' };
+    }
+
+    const groupedGoogleEvents = {};
+    for (const ev of (eventsData.items || [])) {
+      const startDateTime = ev?.start?.dateTime || '';
+      const startDate = ev?.start?.date || '';
+      const isoDate = (startDateTime || startDate || '').slice(0, 10);
+      if (!isoDate) continue;
+
+      let time = '';
+      if (startDateTime) {
+        const dt = new Date(startDateTime);
+        if (!Number.isNaN(dt.getTime())) {
+          time = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}:00`;
+        }
+      }
+
+      if (!groupedGoogleEvents[isoDate]) groupedGoogleEvents[isoDate] = [];
+      groupedGoogleEvents[isoDate].push({
+        id: `google:${ev.id}`,
+        text: ev.summary || 'Untitled Google event',
+        time,
+        source: 'google',
+        googleEventId: ev.id
+      });
+    }
+
+    const existing = readCalendarEvents();
+    const merged = {};
+
+    for (const [dateKey, events] of Object.entries(existing)) {
+      const keep = (Array.isArray(events) ? events : []).filter((eventItem) => eventItem?.source !== 'google');
+      if (keep.length > 0) merged[dateKey] = keep;
+    }
+
+    for (const [dateKey, events] of Object.entries(groupedGoogleEvents)) {
+      const existingList = Array.isArray(merged[dateKey]) ? merged[dateKey] : [];
+      merged[dateKey] = [...existingList, ...events];
+    }
+
+    const success = writeCalendarEvents(merged);
+    return { success, imported: Object.values(groupedGoogleEvents).reduce((sum, list) => sum + list.length, 0) };
+  } catch (err) {
+    console.error('[Main] Google calendar sync failed:', err);
+    return { success: false, error: err.message || 'Google Calendar sync failed.' };
+  }
 });
 
 const getIconPath = () => {
@@ -302,10 +558,7 @@ ipcMain.on('quit-app', () => {
 
 ipcMain.handle('save-settings', async (event, settings) => {
   try {
-    const docsDir = path.join(app.getPath('documents'), 'Island');
-    if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir, { recursive: true });
-    const settingsPath = path.join(docsDir, 'settings.json');
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    fs.writeFileSync(getSettingsPath(), JSON.stringify(settings, null, 2));
     return true;
   } catch (err) {
     console.error("Error saving settings:", err);
@@ -314,16 +567,7 @@ ipcMain.handle('save-settings', async (event, settings) => {
 });
 
 ipcMain.handle('get-settings', async () => {
-  try {
-    const settingsPath = path.join(app.getPath('documents'), 'Island', 'settings.json');
-    if (fs.existsSync(settingsPath)) {
-      const data = fs.readFileSync(settingsPath, 'utf8');
-      return JSON.parse(data);
-    }
-  } catch (err) {
-    console.error("Error getting settings:", err);
-  }
-  return {};
+  return readSettings();
 });
 
 ipcMain.handle('change-volume', (event, direction) => {
@@ -369,163 +613,6 @@ Write-Output $newBrightness
   });
 });
 
-ipcMain.handle('select-file', async () => {
-  const result = await dialog.showOpenDialog({
-    properties: ['openFile'],
-    filters: [{ name: 'Applications', extensions: ['exe', 'lnk'] }]
-  });
-  if (result.canceled) return null;
-  return result.filePaths[0];
-});
-
-ipcMain.handle('open-app', async (event, path) => {
-  await shell.openPath(path);
-});
-
-const resolveShortcut = async (filePath) => {
-  try {
-    if (!filePath || !filePath.toLowerCase().endsWith('.lnk')) {
-        return filePath;
-    }
-    
-    // Try Electron's built-in shell.readShortcutLink first (fastest)
-    try {
-        const shortcutDetails = shell.readShortcutLink(filePath);
-        if (shortcutDetails && shortcutDetails.target) {
-            console.log(`[Main] Electron resolved shortcut: ${filePath} -> ${shortcutDetails.target}`);
-            return shortcutDetails.target;
-        }
-    } catch (e) {
-        // Electron API might fail on some shortcut types, continue to PowerShell
-        console.log('[Main] shell.readShortcutLink failed, falling back to PowerShell');
-    }
-
-    return new Promise((resolve) => {
-        const psScript = `
-$ErrorActionPreference = 'SilentlyContinue'
-$path = '${filePath.replace(/'/g, "''")}'
-try {
-    $sh = New-Object -ComObject WScript.Shell
-    $shortcut = $sh.CreateShortcut($path)
-    if ($shortcut.TargetPath) {
-        Write-Output $shortcut.TargetPath
-    } else {
-        Write-Output $path
-    }
-} catch {
-    Write-Output $path
-}
-`;
-        const tempPath = path.join(app.getPath('userData'), `resolve-${Date.now()}-${Math.floor(Math.random() * 1000)}.ps1`);
-        try {
-            fs.writeFileSync(tempPath, psScript);
-        } catch (e) {
-            return resolve(filePath);
-        }
-
-        exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempPath}"`, { timeout: 2000 }, (err, stdout, stderr) => {
-            try { fs.unlinkSync(tempPath); } catch { }
-            if (err || !stdout || !stdout.trim()) {
-                resolve(filePath);
-            } else {
-                resolve(stdout.trim());
-            }
-        });
-    });
-  } catch (e) {
-    console.error('[Main] Error resolving shortcut:', e);
-    return filePath;
-  }
-};
-
-const getIconFromPowerShell = async (filePath) => {
-  return new Promise((resolve) => {
-    // Basic script to extract icon and return as base64
-    // Using simple ExtractAssociatedIcon which works for most files
-    const psScript = `
-$ErrorActionPreference = 'Stop'
-try {
-    Add-Type -AssemblyName System.Drawing
-    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon('${filePath.replace(/'/g, "''")}')
-    if ($icon) {
-        $bitmap = $icon.ToBitmap()
-        $stream = New-Object System.IO.MemoryStream
-        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
-        $bytes = $stream.ToArray()
-        $base64 = [Convert]::ToBase64String($bytes)
-        Write-Output "data:image/png;base64,$base64"
-    } else {
-        Write-Output "null"
-    }
-} catch {
-    Write-Output "null"
-}
-`;
-    const tempPath = path.join(app.getPath('userData'), `icon-${Date.now()}-${Math.floor(Math.random() * 1000)}.ps1`);
-    try {
-        fs.writeFileSync(tempPath, psScript);
-    } catch (e) {
-        return resolve(null);
-    }
-
-    exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempPath}"`, { timeout: 3000 }, (err, stdout, stderr) => {
-        try { fs.unlinkSync(tempPath); } catch { }
-        if (err || !stdout || stdout.trim() === 'null') {
-            resolve(null);
-        } else {
-            resolve(stdout.trim());
-        }
-    });
-  });
-};
-
-ipcMain.handle('get-app-icon', async (event, filePath) => {
-  try {
-    let targetPath = filePath;
-    let fallbackPath = filePath;
-
-    if (filePath.toLowerCase().endsWith('.lnk')) {
-        try {
-            const details = shell.readShortcutLink(filePath);
-            if (details) {
-                if (details.icon) {
-                    console.log(`[Main] Using shortcut icon: ${details.icon}`);
-                    targetPath = details.icon;
-                } else if (details.target) {
-                    console.log(`[Main] Using shortcut target: ${details.target}`);
-                    targetPath = details.target;
-                    fallbackPath = details.target;
-                }
-            }
-        } catch (e) {
-            console.error('[Main] Failed to read shortcut details:', e);
-            // Fallback to resolving via PowerShell if native fails
-            const resolved = await resolveShortcut(filePath);
-            if (resolved && resolved !== filePath) {
-                targetPath = resolved;
-                fallbackPath = resolved;
-            }
-        }
-    }
-
-    console.log(`[Main] Getting icon for: ${filePath} -> Target: ${targetPath}`);
-
-    // 1. Try Electron native API first
-    const icon = await app.getFileIcon(targetPath, { size: 'large' });
-    if (!icon.isEmpty()) {
-        return icon.toDataURL();
-    }
-    
-    // 2. Fallback to PowerShell if native API fails or returns empty
-    console.log('[Main] Falling back to PowerShell for icon:', fallbackPath);
-    return await getIconFromPowerShell(fallbackPath);
-  } catch (e) {
-    console.error('Error getting icon:', e);
-    // 3. Fallback to PowerShell on error
-    return await getIconFromPowerShell(filePath);
-  }
-});
-
 ipcMain.handle('save-todo', async (event, todos) => {
   try {
     const docsDir = path.join(app.getPath('documents'), 'Island');
@@ -553,29 +640,11 @@ ipcMain.handle('get-todo', async () => {
 });
 
 ipcMain.handle('get-calendar-events', async () => {
-  try {
-    const eventsPath = path.join(app.getPath('documents'), 'Island', 'calendar-events.json');
-    if (fs.existsSync(eventsPath)) {
-      const data = fs.readFileSync(eventsPath, 'utf8');
-      return JSON.parse(data);
-    }
-  } catch (err) {
-    console.error("Error getting calendar events:", err);
-  }
-  return {};
+  return readCalendarEvents();
 });
 
 ipcMain.handle('save-calendar-events', async (event, events) => {
-  try {
-    const docsDir = path.join(app.getPath('documents'), 'Island');
-    if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir, { recursive: true });
-    const eventsPath = path.join(docsDir, 'calendar-events.json');
-    fs.writeFileSync(eventsPath, JSON.stringify(events, null, 2));
-    return true;
-  } catch (err) {
-    console.error("Error saving calendar events:", err);
-    return false;
-  }
+  return writeCalendarEvents(events);
 });
 
 ipcMain.handle('log', (event, message) => {
