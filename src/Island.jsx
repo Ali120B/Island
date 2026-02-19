@@ -302,6 +302,10 @@ export default function Island() {
   const [embeddedWebUrl, setEmbeddedWebUrl] = useState('');
   const [webviewReloadKey, setWebviewReloadKey] = useState(0);
   const [enabledHomeWidgets, setEnabledHomeWidgets] = useState(getEnabledHomeWidgets());
+  const [googleClientId, setGoogleClientId] = useState(localStorage.getItem("google-calendar-client-id") || "");
+  const [googleClientSecret, setGoogleClientSecret] = useState(localStorage.getItem("google-calendar-client-secret") || "");
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleMessage, setGoogleMessage] = useState("");
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState(null);
   
@@ -1141,12 +1145,37 @@ export default function Island() {
       setTimerBorderColor(localStorage.getItem("timer-border-color") || "#FAFAFA");
       setNotchModeEnabled(localStorage.getItem("notch-mode") === "true");
       setEnabledHomeWidgets(getEnabledHomeWidgets());
+      setGoogleClientId(localStorage.getItem("google-calendar-client-id") || "");
+      setGoogleClientSecret(localStorage.getItem("google-calendar-client-secret") || "");
     };
 
     syncSettings();
     window.addEventListener('storage', syncSettings);
     return () => window.removeEventListener('storage', syncSettings);
   }, []);
+
+  useEffect(() => {
+    if (window.electronAPI?.googleCalendarStatus) {
+      window.electronAPI.googleCalendarStatus().then((status) => {
+        setGoogleConnected(Boolean(status?.connected));
+      });
+    }
+  }, []);
+
+  const toggleHomeWidget = (widgetKey) => {
+    const exists = enabledHomeWidgets.includes(widgetKey);
+    let next = [...enabledHomeWidgets];
+    if (exists) {
+      next = next.filter((key) => key !== widgetKey);
+      if (next.length === 0) return;
+    } else {
+      if (next.length >= 4) return;
+      next.push(widgetKey);
+    }
+    setEnabledHomeWidgets(next);
+    localStorage.setItem('home-widgets-enabled', JSON.stringify(next));
+    window.dispatchEvent(new Event('storage'));
+  };
 
   const handleBatteryAlertsChange = (e) => {
     const value = e.target.value === "true";
@@ -3274,6 +3303,144 @@ export default function Island() {
                         }} />
                       </div>
                     </div>
+
+                    {/* Notch Mode */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Notch Mode</span>
+                      <div
+                        onClick={() => {
+                          const newVal = !notchModeEnabled;
+                          setNotchModeEnabled(newVal);
+                          localStorage.setItem("notch-mode", String(newVal));
+                        }}
+                        style={{
+                          width: 34,
+                          height: 20,
+                          borderRadius: 10,
+                          background: notchModeEnabled ? '#4facfe' : 'rgba(255,255,255,0.1)',
+                          position: 'relative',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: '50%',
+                          background: 'white',
+                          position: 'absolute',
+                          top: 2,
+                          left: notchModeEnabled ? 16 : 2,
+                          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Home Widget Settings Section */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Home Widgets</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {AVAILABLE_HOME_WIDGETS.map((widgetKey) => {
+                      const isActive = enabledHomeWidgets.includes(widgetKey);
+                      const label = widgetKey === 'clock_media'
+                        ? 'Clock / Media'
+                        : widgetKey.charAt(0).toUpperCase() + widgetKey.slice(1);
+                      return (
+                        <button
+                          key={widgetKey}
+                          onClick={() => toggleHomeWidget(widgetKey)}
+                          style={{
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: 10,
+                            background: isActive ? 'rgba(79,172,254,0.25)' : 'rgba(255,255,255,0.04)',
+                            color: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
+                            padding: '8px 10px',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 11, opacity: 0.55 }}>
+                    Selected: {enabledHomeWidgets.length}/4
+                  </div>
+                </div>
+
+                {/* Calendar Settings Section */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Calendar</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <input
+                      type="text"
+                      value={googleClientId}
+                      onChange={(e) => {
+                        setGoogleClientId(e.target.value);
+                        localStorage.setItem('google-calendar-client-id', e.target.value);
+                      }}
+                      placeholder="Google OAuth Client ID"
+                      style={{
+                        width: '100%',
+                        background: 'rgba(255,255,255,0.08)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: 10,
+                        padding: '8px 10px',
+                        color: 'white',
+                        outline: 'none',
+                        fontSize: 11
+                      }}
+                    />
+                    <input
+                      type="password"
+                      value={googleClientSecret}
+                      onChange={(e) => {
+                        setGoogleClientSecret(e.target.value);
+                        localStorage.setItem('google-calendar-client-secret', e.target.value);
+                      }}
+                      placeholder="Google OAuth Client Secret"
+                      style={{
+                        width: '100%',
+                        background: 'rgba(255,255,255,0.08)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: 10,
+                        padding: '8px 10px',
+                        color: 'white',
+                        outline: 'none',
+                        fontSize: 11
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button onClick={async () => {
+                        setGoogleMessage('Connecting...');
+                        const result = await window.electronAPI?.googleCalendarConnect?.();
+                        if (result?.success) {
+                          setGoogleConnected(true);
+                          setGoogleMessage('Connected.');
+                        } else {
+                          setGoogleMessage(result?.error || 'Connection failed.');
+                        }
+                      }} style={{ padding: '6px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#34d399', color: '#052e16', fontSize: 11, fontWeight: 700 }}>Connect</button>
+                      <button onClick={async () => {
+                        const result = await window.electronAPI?.googleCalendarSync?.();
+                        setGoogleMessage(result?.success ? `Synced ${result?.imported || 0} events.` : (result?.error || 'Sync failed.'));
+                      }} style={{ padding: '6px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#1f2937', color: '#e5e7eb', fontSize: 11, fontWeight: 600 }}>Sync</button>
+                      <button onClick={async () => {
+                        const result = await window.electronAPI?.googleCalendarDisconnect?.();
+                        if (result?.success) {
+                          setGoogleConnected(false);
+                          setGoogleMessage('Disconnected.');
+                        } else {
+                          setGoogleMessage(result?.error || 'Disconnect failed.');
+                        }
+                      }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #374151', cursor: 'pointer', background: 'transparent', color: '#e5e7eb', fontSize: 11, fontWeight: 600 }}>Disconnect</button>
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.6 }}>Status: {googleConnected ? 'Connected' : 'Not connected'}</div>
+                    {googleMessage ? <div style={{ fontSize: 11, color: '#93c5fd' }}>{googleMessage}</div> : null}
                   </div>
                 </div>
 
