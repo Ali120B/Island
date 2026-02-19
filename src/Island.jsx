@@ -237,6 +237,8 @@ export default function Island() {
   const [showWatchInIdle, setShowWatchInIdle] = useState(localStorage.getItem("show-watch-idle") !== "false");
   const [showTimerBorder, setShowTimerBorder] = useState(localStorage.getItem("show-timer-border") !== "false");
   const [timerBorderColor, setTimerBorderColor] = useState(localStorage.getItem("timer-border-color") || "#FAFAFA");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(localStorage.getItem("notifications-enabled") !== "false");
+  const [notchMode, setNotchMode] = useState(localStorage.getItem("notch-mode") === "true");
   const [scrollValue, setScrollValue] = useState(0); // For the visual bar
   const [showScrollOverlay, setShowScrollOverlay] = useState(false);
   const overlayTimeout = useRef(null);
@@ -593,6 +595,7 @@ export default function Island() {
   const [calendarEventInput, setCalendarEventInput] = useState("");
   const [calendarEventTimeInput, setCalendarEventTimeInput] = useState("");
   const [calendarEventAmPm, setCalendarEventAmPm] = useState("AM");
+  const [googleCalendarUrl, setGoogleCalendarUrl] = useState(localStorage.getItem("google-calendar-ics-url") || "");
   const [editingCalendarEventAmPm, setEditingCalendarEventAmPm] = useState("AM");
   const [editingCalendarEventId, setEditingCalendarEventId] = useState(null);
   const [editingCalendarEventText, setEditingCalendarEventText] = useState("");
@@ -801,6 +804,7 @@ export default function Island() {
     ringingPrevModeRef.current = mode;
     setRingingEvent({ id: ev.id, text: ev.text, time: ev.time || '', remainingMs: 10000, isoDate });
     setLastInteraction(Date.now());
+    notifyUser("Calendar reminder", `${ev.text}${ev.time ? ` • ${ev.time}` : ""}`);
 
     if (mode !== 'large') {
       setMode('quick');
@@ -1000,6 +1004,7 @@ export default function Island() {
         setTimerSeconds(prev => {
           if (prev <= 1) {
             setIsTimerRunning(false);
+            notifyUser("Timer finished", "Your Island timer has completed.");
             return 0;
           }
           return prev - 1;
@@ -1066,6 +1071,7 @@ export default function Island() {
     if (mode === "quick" || isPlaying) {
       return { width: 300, height: 43 };
     }
+    if (notchMode) return { width: 140, height: 30 };
     return { width: 175, height: 43 };
   })();
 
@@ -1155,7 +1161,9 @@ export default function Island() {
         "ai-model": "openai/gpt-3.5-turbo",
         "infinite-scroll": "false",
         "auto-revert-time": "10000",
-        "scroll-action": "volume"
+        "scroll-action": "volume",
+        "notifications-enabled": "true",
+        "notch-mode": "false"
       };
 
       Object.entries(defaults).forEach(([key, value]) => {
@@ -1205,12 +1213,21 @@ export default function Island() {
       setShowWatchInIdle(localStorage.getItem("show-watch-idle") !== "false");
       setShowTimerBorder(localStorage.getItem("show-timer-border") !== "false");
       setTimerBorderColor(localStorage.getItem("timer-border-color") || "#FAFAFA");
+      setNotificationsEnabled(localStorage.getItem("notifications-enabled") !== "false");
+      setNotchMode(localStorage.getItem("notch-mode") === "true");
     };
 
     syncSettings();
     window.addEventListener('storage', syncSettings);
     return () => window.removeEventListener('storage', syncSettings);
   }, []);
+
+  useEffect(() => {
+    if (!notificationsEnabled || typeof Notification === "undefined") return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => { });
+    }
+  }, [notificationsEnabled]);
 
   const handleBatteryAlertsChange = (e) => {
     const value = e.target.value === "true";
@@ -1678,6 +1695,81 @@ export default function Island() {
     }
   }, [theme, opacity]);
 
+  const notifyUser = (title, body) => {
+    if (!notificationsEnabled || typeof Notification === "undefined") return;
+    try {
+      if (Notification.permission === "granted") {
+        new Notification(title, { body, silent: false });
+      }
+    } catch (err) {
+      console.error("Notification error:", err);
+    }
+  };
+
+  const parseICSDate = (value) => {
+    if (!value) return null;
+    const raw = String(value).trim();
+    const m = raw.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?/);
+    if (!m) return null;
+    const [, y, mo, d, hh = "", mm = "", ss = ""] = m;
+    return {
+      isoDate: `${y}-${mo}-${d}`,
+      time: hh ? `${hh}:${mm || "00"}:${ss || "00"}` : ""
+    };
+  };
+
+  const importGoogleCalendar = async () => {
+    const url = (googleCalendarUrl || "").trim();
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      const raw = await res.text();
+      if (!res.ok || !raw.includes("BEGIN:VEVENT")) throw new Error("Invalid ICS feed");
+
+      const lines = raw.split(/\r?\n/);
+      const importedByDate = {};
+      let current = null;
+
+      for (const line of lines) {
+        if (line.startsWith("BEGIN:VEVENT")) {
+          current = {};
+        } else if (line.startsWith("END:VEVENT")) {
+          if (current?.summary && current?.start?.isoDate) {
+            const iso = current.start.isoDate;
+            importedByDate[iso] = importedByDate[iso] || [];
+            importedByDate[iso].push({
+              id: Date.now() + Math.floor(Math.random() * 1000000),
+              text: `[GCal] ${current.summary}`,
+              time: current.start.time || ""
+            });
+          }
+          current = null;
+        } else if (current) {
+          if (line.startsWith("SUMMARY:")) current.summary = line.slice(8).trim();
+          if (line.startsWith("DTSTART")) {
+            const val = line.split(":").slice(1).join(":").trim();
+            current.start = parseICSDate(val);
+          }
+        }
+      }
+
+      const next = { ...(calendarEvents || {}) };
+      Object.entries(importedByDate).forEach(([date, events]) => {
+        const existing = Array.isArray(next[date]) ? next[date] : [];
+        const existingKeys = new Set(existing.map(ev => `${ev.text}@@${ev.time || ""}`));
+        const deduped = events.filter(ev => !existingKeys.has(`${ev.text}@@${ev.time || ""}`));
+        next[date] = [...existing, ...deduped];
+      });
+
+      await saveCalendarEvents(next);
+      localStorage.setItem("google-calendar-ics-url", url);
+      notifyUser("Google Calendar imported", "Events were added to your Island calendar.");
+    } catch (err) {
+      console.error("Failed to import Google Calendar ICS:", err);
+      notifyUser("Google Calendar import failed", "Please verify your public ICS URL.");
+    }
+  };
+
   // Browser Search Feature
   function resolveSearchInput(val) {
     const trimmed = val.trim();
@@ -1978,7 +2070,7 @@ export default function Island() {
               ? cornerRadius
               : theme === "win95"
                 ? 0
-                : 16,
+                : (notchMode ? "0 0 16px 16px" : 16),
         boxShadow: hideNotActiveIslandEnabled && mode === 'still' ? "none" : '2px 2px 30px rgba(0, 0, 0, 0.07)',
         backgroundColor: (view === 'weather' || view === 'weather_details')
           ? (getWeatherStyles().bgColor.includes('gradient') ? 'transparent' : getWeatherStyles().bgColor)
@@ -3335,6 +3427,69 @@ export default function Island() {
                           position: 'absolute',
                           top: 2,
                           left: showTimerBorder ? 16 : 2,
+                          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }} />
+                      </div>
+                    </div>
+
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Notifications</span>
+                      <div
+                        onClick={() => {
+                          const newVal = !notificationsEnabled;
+                          setNotificationsEnabled(newVal);
+                          localStorage.setItem("notifications-enabled", String(newVal));
+                        }}
+                        style={{
+                          width: 34,
+                          height: 20,
+                          borderRadius: 10,
+                          background: notificationsEnabled ? '#4facfe' : 'rgba(255,255,255,0.1)',
+                          position: 'relative',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: '50%',
+                          background: 'white',
+                          position: 'absolute',
+                          top: 2,
+                          left: notificationsEnabled ? 16 : 2,
+                          transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }} />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>Notch Mode</span>
+                      <div
+                        onClick={() => {
+                          const newVal = !notchMode;
+                          setNotchMode(newVal);
+                          localStorage.setItem("notch-mode", String(newVal));
+                        }}
+                        style={{
+                          width: 34,
+                          height: 20,
+                          borderRadius: 10,
+                          background: notchMode ? '#4facfe' : 'rgba(255,255,255,0.1)',
+                          position: 'relative',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: '50%',
+                          background: 'white',
+                          position: 'absolute',
+                          top: 2,
+                          left: notchMode ? 16 : 2,
                           transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
                         }} />
                       </div>
@@ -4989,6 +5144,22 @@ export default function Island() {
                 );
               })
             )}
+          </div>
+
+          <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              type="text"
+              value={googleCalendarUrl}
+              onChange={(e) => setGoogleCalendarUrl(e.target.value)}
+              placeholder="Google Calendar public ICS URL"
+              style={{ flex: 1, padding: '8px 12px', borderRadius: 12, border: 'none', outline: 'none', background: 'rgba(255,255,255,0.08)', color: 'white', fontSize: 11 }}
+            />
+            <div
+              onClick={importGoogleCalendar}
+              style={{ padding: '8px 10px', borderRadius: 10, background: 'rgba(255,255,255,0.15)', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Import GCal
+            </div>
           </div>
 
           <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
