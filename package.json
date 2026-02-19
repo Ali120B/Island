@@ -5,13 +5,14 @@
   "description": "Dynamic Island for windows",
   "main": ".vite/build/main.js",
   "scripts": {
-    "start": "electron-forge start",
-    "package": "electron-forge package",
-    "make": "electron-forge make --arch x64,ia32",
-    "build": "electron-forge package && electron-builder build --win --publish never",
-    "dist": "electron-forge package && electron-builder build --win",
-    "publish": "electron-forge package && electron-builder build --win --publish always",
-    "lint": "echo \"No linting configured\""
+    "start": "npm run check:source && electron-forge start",
+    "package": "npm run check:source && electron-forge package",
+    "make": "npm run check:source && electron-forge make --arch x64,ia32",
+    "build": "npm run check:source && electron-forge package && electron-builder build --win --publish never",
+    "dist": "npm run check:source && electron-forge package && electron-builder build --win",
+    "publish": "npm run check:source && electron-forge package && electron-builder build --win --publish always",
+    "lint": "echo \"No linting configured\"",
+    "check:source": "node scripts/check-conflicts-and-syntax.mjs"
   },
   "build": {
     "appId": "com.ali120b.island",
