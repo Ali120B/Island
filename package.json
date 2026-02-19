@@ -11,7 +11,8 @@
     "build": "electron-forge package && electron-builder build --win --publish never",
     "dist": "electron-forge package && electron-builder build --win",
     "publish": "electron-forge package && electron-builder build --win --publish always",
-    "lint": "echo \"No linting configured\""
+    "lint": "echo \"No linting configured\"",
+    "check:source": "node scripts/check-conflicts-and-syntax.mjs"
   },
   "build": {
     "appId": "com.ali120b.island",
