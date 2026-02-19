@@ -294,6 +294,8 @@ export default function Island() {
   const [showInIslandSettings, setShowInIslandSettings] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [embeddedWebUrl, setEmbeddedWebUrl] = useState('');
+  const [webviewReloadKey, setWebviewReloadKey] = useState(0);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState(null);
   
@@ -1051,7 +1053,9 @@ export default function Island() {
         case 'weather_details': return { width: 350, height: 200 };
         case 'app_shortcuts': return { width: 420, height: 340 };
         case 'search_urls': return { width: 400, height: 210 };
-        case 'search': return { width: 420, height: searchResults.length > 0 ? (searchResults.length * 65 + 100) : 180 };
+        case 'search':
+          if (embeddedWebUrl) return { width: 760, height: 540 };
+          return { width: 420, height: searchResults.length > 0 ? (searchResults.length * 65 + 100) : 180 };
         case 'settings': return { width: 420, height: 380 };
         default: return { width: 400, height: 200 };
       }
@@ -1675,6 +1679,22 @@ export default function Island() {
   }, [theme, opacity]);
 
   // Browser Search Feature
+  function resolveSearchInput(val) {
+    const trimmed = val.trim();
+    if (!trimmed) return { url: '', isDirectUrl: false };
+    const isDirectUrl = trimmed.includes('.') && !trimmed.includes(' ');
+    if (isDirectUrl) {
+      return {
+        url: trimmed.startsWith('http') ? trimmed : `https://${trimmed}`,
+        isDirectUrl: true
+      };
+    }
+    return {
+      url: `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`,
+      isDirectUrl: false
+    };
+  }
+
   function searchBrowser() {
     const trimmedSearch = browserSearch.trim();
     if (!trimmedSearch) return;
@@ -3972,17 +3992,63 @@ export default function Island() {
               if (e.key === 'Enter') {
                 const val = searchQuery;
                 if (!val) return;
-                const url = val.includes('.') && !val.includes(' ') ? (val.startsWith('http') ? val : `https://${val}`) : `https://www.google.com/search?q=${encodeURIComponent(val)}`;
-                window.electronAPI?.openExternal ? window.electronAPI.openExternal(url) : window.open(url, "_blank");
-                setView('home');
-                setSearchQuery('');
+                const { url, isDirectUrl } = resolveSearchInput(val);
+                if (isDirectUrl) {
+                  setEmbeddedWebUrl(url);
+                  setWebviewReloadKey((prev) => prev + 1);
+                } else {
+                  window.electronAPI?.openExternal ? window.electronAPI.openExternal(url) : window.open(url, "_blank");
+                  setView('home');
+                  setSearchQuery('');
+                }
               }
-              if (e.key === 'Escape') setView('home');
+              if (e.key === 'Escape') {
+                if (embeddedWebUrl) {
+                  setEmbeddedWebUrl('');
+                } else {
+                  setView('home');
+                }
+              }
             }}
           />
 
+          {embeddedWebUrl && (
+            <div style={{
+              width: '95%',
+              marginTop: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              height: 360
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 11, opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{embeddedWebUrl}</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    onClick={() => window.electronAPI?.openExternal ? window.electronAPI.openExternal(embeddedWebUrl) : window.open(embeddedWebUrl, "_blank")}
+                    style={{ border: 'none', borderRadius: 10, padding: '5px 10px', background: 'rgba(255,255,255,0.12)', color: '#fff', fontSize: 10, cursor: 'pointer' }}
+                  >
+                    Open External
+                  </button>
+                  <button
+                    onClick={() => setEmbeddedWebUrl('')}
+                    style={{ border: 'none', borderRadius: 10, padding: '5px 10px', background: 'rgba(239,68,68,0.25)', color: '#fff', fontSize: 10, cursor: 'pointer' }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              <webview
+                key={webviewReloadKey}
+                src={embeddedWebUrl}
+                allowpopups="true"
+                style={{ width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.12)' }}
+              />
+            </div>
+          )}
+
           {/* Search Results */}
-          {searchResults.length > 0 && (
+          {!embeddedWebUrl && searchResults.length > 0 && (
             <div style={{
               width: '95%',
               marginTop: 15,
@@ -3998,9 +4064,9 @@ export default function Island() {
                 <div
                   key={idx}
                   onClick={() => {
-                    window.electronAPI?.openExternal ? window.electronAPI.openExternal(result.url) : window.open(result.url, "_blank");
-                    setView('home');
-                    setSearchQuery('');
+                    if (!result.url) return;
+                    setEmbeddedWebUrl(result.url);
+                    setWebviewReloadKey((prev) => prev + 1);
                   }}
                   style={{
                     padding: '12px 16px',

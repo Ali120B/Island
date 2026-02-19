@@ -91,7 +91,8 @@ const createWindow = () => {
     visibleOnFullScreen: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
-      devTools: false
+      devTools: false,
+      webviewTag: true
     },
     show: false,
     // type: 'toolbar', // Commenting out to test visibility
