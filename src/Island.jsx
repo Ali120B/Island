@@ -816,6 +816,7 @@ export default function Island() {
       action: { type: "calendar", isoDate }
     });
 
+    // Merge-resolution choice: reminders should surface in quick mode, not large mode.
     if (mode !== 'quick') {
       setMode('quick');
     }
@@ -1712,6 +1713,7 @@ export default function Island() {
     }
   }, [theme, opacity]);
 
+  // Merge-resolution choice: payload-based notification API (title/message/icon/action).
   const showInIslandNotification = ({ title, message = '', icon = 'bell', durationMs = 7000, action = null }) => {
     setNotificationBanner({ title, message, icon, action });
     if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
@@ -1767,6 +1769,7 @@ export default function Island() {
     }
   };
 
+  // Merge-resolution choice: parse full DTSTART line (supports TZID/Z) and normalize to local time.
   const parseICSDate = (line) => {
     if (!line || !line.startsWith("DTSTART")) return null;
 
