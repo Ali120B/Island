@@ -817,6 +817,10 @@ export default function Island() {
     });
 
     if (mode !== 'quick') {
+    // Merge-resolution choice: reminders should surface in quick mode, not large mode.
+    if (mode !== 'quick') {
+
+    if (mode !== 'large') {
       setMode('quick');
     }
     if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false, false);
@@ -1712,6 +1716,7 @@ export default function Island() {
     }
   }, [theme, opacity]);
 
+  // Merge-resolution choice: payload-based notification API (title/message/icon/action).
   const showInIslandNotification = ({ title, message = '', icon = 'bell', durationMs = 7000, action = null }) => {
     setNotificationBanner({ title, message, icon, action });
     if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
@@ -1767,6 +1772,7 @@ export default function Island() {
     }
   };
 
+  // Merge-resolution choice: parse full DTSTART line (supports TZID/Z) and normalize to local time.
   const parseICSDate = (line) => {
     if (!line || !line.startsWith("DTSTART")) return null;
 
@@ -1808,6 +1814,16 @@ export default function Island() {
     const localTime = `${String(localDate.getHours()).padStart(2, "0")}:${String(localDate.getMinutes()).padStart(2, "0")}:${String(localDate.getSeconds()).padStart(2, "0")}`;
 
     return { isoDate: localIso, time: localTime };
+  const parseICSDate = (value) => {
+    if (!value) return null;
+    const raw = String(value).trim();
+    const m = raw.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?/);
+    if (!m) return null;
+    const [, y, mo, d, hh = "", mm = "", ss = ""] = m;
+    return {
+      isoDate: `${y}-${mo}-${d}`,
+      time: hh ? `${hh}:${mm || "00"}:${ss || "00"}` : ""
+    };
   };
 
   const importGoogleCalendar = async () => {
@@ -1840,6 +1856,8 @@ export default function Island() {
           if (line.startsWith("SUMMARY:")) current.summary = line.slice(8).trim();
           if (line.startsWith("DTSTART")) {
             current.start = parseICSDate(line);
+            const val = line.split(":").slice(1).join(":").trim();
+            current.start = parseICSDate(val);
           }
         }
       }
