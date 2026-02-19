@@ -27,6 +27,12 @@ export default function Settings() {
     const [islandPosition, setIslandPosition] = useState(Number(localStorage.getItem("island-position") || 20));
     const [aiModel, setAiModel] = useState(localStorage.getItem("ai-model") || "openai/gpt-3.5-turbo");
     const [customModel, setCustomModel] = useState(localStorage.getItem("custom-model") || "");
+    const [scrollAction, setScrollAction] = useState(localStorage.getItem("scroll-action") || "volume");
+    const [notchMode, setNotchMode] = useState(localStorage.getItem("notch-mode") === "true");
+    const [googleClientId, setGoogleClientId] = useState(localStorage.getItem("google-calendar-client-id") || "");
+    const [googleClientSecret, setGoogleClientSecret] = useState(localStorage.getItem("google-calendar-client-secret") || "");
+    const [googleConnected, setGoogleConnected] = useState(false);
+    const [googleMessage, setGoogleMessage] = useState("");
     const [showTimerBorder, setShowTimerBorder] = useState(localStorage.getItem("show-timer-border") !== "false");
     const [timerBorderColor, setTimerBorderColor] = useState(localStorage.getItem("timer-border-color") || "#FAFAFA");
     const [updateDownloaded, setUpdateDownloaded] = useState(false);
@@ -48,6 +54,11 @@ export default function Settings() {
             }
         };
         checkStatus();
+        if (window.electronAPI?.googleCalendarStatus) {
+            window.electronAPI.googleCalendarStatus().then((status) => {
+                setGoogleConnected(Boolean(status?.connected));
+            });
+        }
     }, []);
 
     useEffect(() => {
@@ -87,6 +98,9 @@ export default function Settings() {
                     if (remoteSettings["ai-model"] !== undefined) setAiModel(remoteSettings["ai-model"]);
                     if (remoteSettings["custom-model"] !== undefined) setCustomModel(remoteSettings["custom-model"]);
                     if (remoteSettings["scroll-action"] !== undefined) setScrollAction(remoteSettings["scroll-action"]);
+                    if (remoteSettings["notch-mode"] !== undefined) setNotchMode(remoteSettings["notch-mode"] === "true");
+                    if (remoteSettings["google-calendar-client-id"] !== undefined) setGoogleClientId(remoteSettings["google-calendar-client-id"]);
+                    if (remoteSettings["google-calendar-client-secret"] !== undefined) setGoogleClientSecret(remoteSettings["google-calendar-client-secret"]);
                     if (remoteSettings["show-timer-border"] !== undefined) setShowTimerBorder(remoteSettings["show-timer-border"] !== "false");
                     if (remoteSettings["timer-border-color"] !== undefined) setTimerBorderColor(remoteSettings["timer-border-color"]);
                 }
@@ -153,6 +167,9 @@ export default function Settings() {
                 "ai-model": aiModel,
                 "custom-model": customModel,
                 "scroll-action": scrollAction,
+                "notch-mode": String(notchMode),
+                "google-calendar-client-id": googleClientId.trim(),
+                "google-calendar-client-secret": googleClientSecret.trim(),
                 "show-timer-border": String(showTimerBorder),
                 "timer-border-color": timerBorderColor
             };
@@ -478,6 +495,56 @@ export default function Settings() {
                     </div>
                 </section>
 
+                {/* Google Calendar Section */}
+                <section style={{ background: '#141414', padding: 25, borderRadius: 20, border: '1px solid #222' }}>
+                    <h3 style={{ margin: '0 0 20px 0', fontSize: 16, fontWeight: 600, color: '#34d399', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        Google Calendar
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <input
+                            type="text"
+                            value={googleClientId}
+                            onChange={(e) => { setGoogleClientId(e.target.value); saveSetting('google-calendar-client-id', e.target.value); }}
+                            placeholder="Google OAuth Client ID"
+                            style={{ width: '100%', background: '#1f1f1f', border: '1px solid #333', borderRadius: 10, padding: '10px 15px', color: 'white', outline: 'none', fontSize: 14 }}
+                        />
+                        <input
+                            type="password"
+                            value={googleClientSecret}
+                            onChange={(e) => { setGoogleClientSecret(e.target.value); saveSetting('google-calendar-client-secret', e.target.value); }}
+                            placeholder="Google OAuth Client Secret"
+                            style={{ width: '100%', background: '#1f1f1f', border: '1px solid #333', borderRadius: 10, padding: '10px 15px', color: 'white', outline: 'none', fontSize: 14 }}
+                        />
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button onClick={async () => {
+                                setGoogleMessage('Connecting to Google...');
+                                const result = await window.electronAPI?.googleCalendarConnect?.();
+                                if (result?.success) {
+                                    setGoogleConnected(true);
+                                    setGoogleMessage('Connected.');
+                                } else {
+                                    setGoogleMessage(result?.error || 'Connection failed.');
+                                }
+                            }} style={{ padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#34d399', color: '#052e16', fontWeight: 700 }}>Connect</button>
+                            <button onClick={async () => {
+                                const result = await window.electronAPI?.googleCalendarSync?.();
+                                setGoogleMessage(result?.success ? `Synced ${result?.imported || 0} events into Island calendar.` : (result?.error || 'Sync failed.'));
+                            }} style={{ padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#1f2937', color: '#e5e7eb', fontWeight: 600 }}>Sync Upcoming</button>
+                            <button onClick={async () => {
+                                const result = await window.electronAPI?.googleCalendarDisconnect?.();
+                                if (result?.success) {
+                                    setGoogleConnected(false);
+                                    setGoogleMessage('Disconnected.');
+                                } else {
+                                    setGoogleMessage(result?.error || 'Disconnect failed.');
+                                }
+                            }} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #374151', cursor: 'pointer', background: 'transparent', color: '#e5e7eb', fontWeight: 600 }}>Disconnect</button>
+                        </div>
+                        <div style={{ fontSize: 12, opacity: 0.7 }}>Status: {googleConnected ? 'Connected' : 'Not connected'}</div>
+                        {googleMessage ? <div style={{ fontSize: 12, color: '#93c5fd' }}>{googleMessage}</div> : null}
+                    </div>
+                </section>
+
                 {/* Features Section */}
                 <section style={{ background: '#141414', padding: 25, borderRadius: 20, border: '1px solid #222' }}>
                     <h3 style={{ margin: '0 0 20px 0', fontSize: 16, fontWeight: 600, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -493,7 +560,8 @@ export default function Settings() {
                             { label: 'Hide when Inactive', value: hideInactive, setter: setHideInactive, key: 'hide-island-notactive' },
                             { label: 'Show Nav Arrows', value: showArrows, setter: setShowArrows, key: 'show-nav-arrows' },
                             { label: 'Infinite Scrolling', value: infiniteScroll, setter: setInfiniteScroll, key: 'infinite-scroll' },
-                            { label: 'Timer Progress Border', value: showTimerBorder, setter: setShowTimerBorder, key: 'show-timer-border' }
+                            { label: 'Timer Progress Border', value: showTimerBorder, setter: setShowTimerBorder, key: 'show-timer-border' },
+                            { label: 'Notch Mode', value: notchMode, setter: setNotchMode, key: 'notch-mode' }
                         ].map(item => (
                             <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 14, fontWeight: 500 }}>{item.label}</span>

@@ -107,6 +107,16 @@ body {
   transform: translateX(-50%) scale(1.01);
 }
 
+
+#Island.notch-mode {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+#Island.notch-mode.still,
+#Island.notch-mode.quick,
+#Island.notch-mode.large {
+  overflow: hidden;
+}
 @keyframes appear {
   0% {
     -webkit-filter: blur(5px);

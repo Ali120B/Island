@@ -25,13 +25,21 @@ The Dynamic Island for Windows.
 - ✅ **Standby & Stealth Modes**: Configurable visibility and persistence settings.
 - ✅ **Scroll Actions**: Control volume or brightness directly by scrolling over the island.
 - ✅ **Cross-Monitor Support**: Syncs across all your desktops and monitors.
-- ✅ **App shortcut support**: Add app shortcuts for apps you like.
+- ✅ **Google Calendar Sync**: Connect your Google account in settings and pull upcoming events directly into Island calendar.
+- ✅ **Notch Mode**: Make idle, hover, and expanded states follow a notch-like silhouette.
 
 ### Todo
-- Add google calendar support for calendar - In progress
 - Add notification support - In progress
-- Notch Mode
 - webview in url bar
+
+
+## Google Calendar setup
+1. Create an OAuth Client ID in Google Cloud Console (`APIs & Services` → `Credentials`) as a **Desktop app**.
+2. Enable the **Google Calendar API** for that project.
+3. Open Island Settings and paste your **Client ID** and **Client Secret** in the Google Calendar section.
+4. Press **Connect**, finish Google sign-in, then press **Sync Upcoming**.
+
+Events are imported into Island's calendar under the same date buckets and tagged as Google sourced events.
 
 ## Build Instructions (Windows)
 
