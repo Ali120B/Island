@@ -457,6 +457,11 @@ export default function Island() {
     return `${y}-${mm}-${dd}`;
   };
 
+  const getTodayIso = () => {
+    const now = new Date();
+    return toIsoDate(now.getFullYear(), now.getMonth(), now.getDate());
+  };
+
   useEffect(() => {
     return () => {
       try {
