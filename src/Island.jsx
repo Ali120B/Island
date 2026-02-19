@@ -533,6 +533,7 @@ export default function Island() {
       try {
         if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
         if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
+        if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
       } catch {
       }
     };
@@ -607,6 +608,8 @@ export default function Island() {
   const ringIntervalRef = useRef(null);
   // audioCtxRef removed per user request to remove audio for events
   const stopBeepRef = useRef(null);
+  const notificationTimeoutRef = useRef(null);
+  const [notificationBanner, setNotificationBanner] = useState(null);
 
   const [showControls, setShowControls] = useState(false);
 
@@ -802,9 +805,19 @@ export default function Island() {
 
     rungEventIdsRef.current.add(ev.id);
     ringingPrevModeRef.current = mode;
-    setRingingEvent({ id: ev.id, text: ev.text, time: ev.time || '', remainingMs: 10000, isoDate });
+    setRingingEvent({ id: ev.id, title: 'Calendar Reminder', icon: 'calendar', text: ev.text, time: ev.time || '', remainingMs: 10000, isoDate });
     setLastInteraction(Date.now());
     notifyUser("Calendar reminder", `${ev.text}${ev.time ? ` • ${ev.time}` : ""}`);
+    showInIslandNotification({
+      title: ev.text || "Calendar reminder",
+      message: ev.time ? `Scheduled at ${ev.time}` : "Tap to open event",
+      icon: "calendar",
+      durationMs: 8000,
+      action: { type: "calendar", isoDate }
+    });
+
+    // Merge-resolution choice: reminders should surface in quick mode, not large mode.
+    if (mode !== 'quick') {
 
     if (mode !== 'large') {
       setMode('quick');
@@ -1005,6 +1018,13 @@ export default function Island() {
           if (prev <= 1) {
             setIsTimerRunning(false);
             notifyUser("Timer finished", "Your Island timer has completed.");
+            showInIslandNotification({
+              title: "Timer",
+              message: "Your timer is complete.",
+              icon: "timer",
+              durationMs: 7000,
+              action: { type: "timer" }
+            });
             return 0;
           }
           return prev - 1;
@@ -1695,6 +1715,51 @@ export default function Island() {
     }
   }, [theme, opacity]);
 
+  // Merge-resolution choice: payload-based notification API (title/message/icon/action).
+  const showInIslandNotification = ({ title, message = '', icon = 'bell', durationMs = 7000, action = null }) => {
+    setNotificationBanner({ title, message, icon, action });
+    if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
+    notificationTimeoutRef.current = setTimeout(() => {
+      setNotificationBanner(null);
+      notificationTimeoutRef.current = null;
+    }, durationMs);
+
+    if (mode !== 'quick') {
+      setMode('quick');
+    }
+  };
+
+
+
+  const handleNotificationClick = () => {
+    if (!notificationBanner) return;
+    const action = notificationBanner.action;
+
+    setNotificationBanner(null);
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current);
+      notificationTimeoutRef.current = null;
+    }
+
+    if (!action || !action.type) return;
+
+    if (action.type === 'timer') {
+      setMode('large');
+      setView('todo_timer');
+      return;
+    }
+
+    if (action.type === 'calendar') {
+      if (action.isoDate) setSelectedCalendarDate(action.isoDate);
+      setMode('large');
+      setView('todo_calendar_events');
+      return;
+    }
+
+    if (action.type === 'url' && action.url) {
+      window.electronAPI?.openExternal ? window.electronAPI.openExternal(action.url) : window.open(action.url, '_blank');
+    }
+  };
   const notifyUser = (title, body) => {
     if (!notificationsEnabled || typeof Notification === "undefined") return;
     try {
@@ -1706,6 +1771,48 @@ export default function Island() {
     }
   };
 
+  // Merge-resolution choice: parse full DTSTART line (supports TZID/Z) and normalize to local time.
+  const parseICSDate = (line) => {
+    if (!line || !line.startsWith("DTSTART")) return null;
+
+    const [metaPart, valuePart] = String(line).split(":");
+    if (!valuePart) return null;
+
+    const metaTokens = (metaPart || "").split(";");
+    const tzidToken = metaTokens.find(t => t.startsWith("TZID="));
+    const tzid = tzidToken ? tzidToken.replace("TZID=", "") : null;
+    const valueTypeToken = metaTokens.find(t => t.startsWith("VALUE="));
+    const isDateOnly = valueTypeToken === "VALUE=DATE" || /^\d{8}$/.test(valuePart.trim());
+
+    const raw = valuePart.trim();
+    const m = raw.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?(Z)?$/);
+    if (!m) return null;
+
+    const [, y, mo, d, hh = "00", mm = "00", ss = "00", zulu = ""] = m;
+
+    if (isDateOnly) {
+      return { isoDate: `${y}-${mo}-${d}`, time: "" };
+    }
+
+    let localDate;
+
+    if (zulu === "Z") {
+      localDate = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mm), Number(ss)));
+    } else if (tzid && typeof Intl !== "undefined" && Intl.DateTimeFormat) {
+      const utcGuess = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mm), Number(ss)));
+      const asTarget = new Date(utcGuess.toLocaleString("en-US", { timeZone: tzid }));
+      const targetOffsetMs = asTarget.getTime() - utcGuess.getTime();
+      localDate = new Date(utcGuess.getTime() - targetOffsetMs);
+    } else {
+      localDate = new Date(Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mm), Number(ss));
+    }
+
+    if (Number.isNaN(localDate.getTime())) return null;
+
+    const localIso = toIsoDate(localDate.getFullYear(), localDate.getMonth(), localDate.getDate());
+    const localTime = `${String(localDate.getHours()).padStart(2, "0")}:${String(localDate.getMinutes()).padStart(2, "0")}:${String(localDate.getSeconds()).padStart(2, "0")}`;
+
+    return { isoDate: localIso, time: localTime };
   const parseICSDate = (value) => {
     if (!value) return null;
     const raw = String(value).trim();
@@ -1747,6 +1854,7 @@ export default function Island() {
         } else if (current) {
           if (line.startsWith("SUMMARY:")) current.summary = line.slice(8).trim();
           if (line.startsWith("DTSTART")) {
+            current.start = parseICSDate(line);
             const val = line.split(":").slice(1).join(":").trim();
             current.start = parseICSDate(val);
           }
@@ -2045,7 +2153,7 @@ export default function Island() {
         width: `${width}px`,
         height: `${height}px`,
         '--island-font-size': `${fontSize}px`,
-        '--island-position': `${islandPosition}px`,
+        '--island-position': `${(notchMode ? (mode === 'large' ? 12 : mode === 'quick' ? 6 : 0) : islandPosition)}px`,
         display: "flex",
         alignItems: "center",
         opacity: hideNotActiveIslandEnabled && mode === 'still' ? 0 : opacity,
@@ -2241,6 +2349,42 @@ export default function Island() {
         </div>
       )}
 
+      {notificationBanner && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 400,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'auto'
+        }}>
+          <div
+            onClick={handleNotificationClick}
+            style={{
+              width: '96%',
+              height: 54,
+              borderRadius: 18,
+              background: 'rgba(0,0,0,0.84)',
+              border: '1px solid rgba(255,255,255,0.16)',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 12px',
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{ width: 26 }} />
+            <div style={{ minWidth: 0, flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 12, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{notificationBanner.title}</div>
+              {notificationBanner.message && (
+                <div style={{ fontSize: 10, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{notificationBanner.message}</div>
+              )}
+            </div>
+            <div style={{ width: 28, height: 28, borderRadius: 999, background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {notificationBanner.icon === 'calendar' ? <Calendar size={14} color={textColor} /> : <TimerIcon size={14} color={textColor} />}
+            </div>
+          </div>
+        </div>
+      )}
+
       {ringingEvent && (
         <div style={{
           position: 'absolute',
@@ -2292,30 +2436,40 @@ export default function Island() {
                 gap: 8
               }}
             >
-              {/* Left: Current Time (Clock) or Time icon */}
-              <div style={{ fontSize: mode === 'large' ? 12 : 16, fontWeight: 700, color: textColor, whiteSpace: 'nowrap' }}>
-                {mode === 'large' ? (ringingEvent.time || '--:--') : time}
-              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, width: '100%' }}>
+                <div style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 999,
+                  background: 'rgba(255,255,255,0.14)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  {ringingEvent.icon === 'calendar' ? <Calendar size={13} color={textColor} /> : <TimerIcon size={13} color={textColor} />}
+                </div>
 
-              {/* Center: Event Text */}
-              <div style={{
-                fontSize: mode === 'large' ? 11 : 13,
-                fontWeight: 600,
-                opacity: 0.9,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                flex: 1,
-                color: textColor,
-                textAlign: 'center'
-              }}>
-                {ringingEvent.text}
-              </div>
+                <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.7, letterSpacing: 0.4 }}>
+                    {ringingEvent.title || 'Reminder'}
+                  </div>
+                  <div style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    opacity: 0.95,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {ringingEvent.text}
+                  </div>
+                </div>
 
-              {/* Right: Spacer to maintain centering */}
-              {mode !== 'large' && (
-                <div style={{ width: 40 }} />
-              )}
+                <div style={{ fontSize: 11, fontWeight: 700, color: textColor, whiteSpace: 'nowrap' }}>
+                  {ringingEvent.time || time}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -4145,9 +4299,10 @@ export default function Island() {
             style={{ width: '90%', padding: '12px 20px', borderRadius: 25, border: 'none', outline: 'none', background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: 16 }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                const val = searchQuery;
+                const val = searchQuery.trim();
                 if (!val) return;
                 const { url, isDirectUrl } = resolveSearchInput(val);
+                if (!url) return;
                 if (isDirectUrl) {
                   setEmbeddedWebUrl(url);
                   setWebviewReloadKey((prev) => prev + 1);

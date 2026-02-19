@@ -67,6 +67,25 @@ const getIconPath = () => {
 
 
 
+
+const disableWindowsDoNotDisturb = () => {
+  if (process.platform !== 'win32') return;
+
+  const commands = [
+    'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Notifications\\Settings" /v NOC_GLOBAL_SETTING_TOASTS_ENABLED /t REG_DWORD /d 1 /f',
+    'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\QuietHours" /v QuietHoursState /t REG_DWORD /d 0 /f',
+    'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\QuietHours" /v LastQuietHoursState /t REG_DWORD /d 0 /f'
+  ];
+
+  commands.forEach((cmd) => {
+    exec(cmd, { windowsHide: true }, (error) => {
+      if (error) {
+        console.warn('[Main] Unable to force-disable Windows DND/Focus Assist:', error.message);
+      }
+    });
+  });
+};
+
 const createWindow = () => {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.size;
@@ -183,6 +202,7 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+  disableWindowsDoNotDisturb();
   
   // Setup Auto-Updater
   if (app.isPackaged) {
