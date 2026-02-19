@@ -28,9 +28,9 @@ The Dynamic Island for Windows.
 - ✅ **App shortcut support**: Add app shortcuts for apps you like.
 
 ### Todo
-- ✅ Add google calendar support for calendar
-- ✅ Add notification support
-- ✅ Notch Mode
+- Add google calendar support for calendar - In progress
+- Add notification support - In progress
+- Notch Mode
 - webview in url bar
 
 ## Build Instructions (Windows)
