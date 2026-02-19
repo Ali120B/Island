@@ -808,6 +808,13 @@ export default function Island() {
     setRingingEvent({ id: ev.id, title: 'Calendar Reminder', icon: 'calendar', text: ev.text, time: ev.time || '', remainingMs: 10000, isoDate });
     setLastInteraction(Date.now());
     notifyUser("Calendar reminder", `${ev.text}${ev.time ? ` • ${ev.time}` : ""}`);
+    showInIslandNotification({
+      title: ev.text || "Calendar reminder",
+      message: ev.time ? `Scheduled at ${ev.time}` : "Tap to open event",
+      icon: "calendar",
+      durationMs: 8000,
+      action: { type: "calendar", isoDate }
+    });
 
     if (mode !== 'quick') {
       setMode('quick');
@@ -1008,7 +1015,13 @@ export default function Island() {
           if (prev <= 1) {
             setIsTimerRunning(false);
             notifyUser("Timer finished", "Your Island timer has completed.");
-            showInIslandNotification("Timer", "Your timer is complete.", "timer");
+            showInIslandNotification({
+              title: "Timer",
+              message: "Your timer is complete.",
+              icon: "timer",
+              durationMs: 7000,
+              action: { type: "timer" }
+            });
             return 0;
           }
           return prev - 1;
@@ -1699,19 +1712,50 @@ export default function Island() {
     }
   }, [theme, opacity]);
 
-  const showInIslandNotification = (title, message, icon = 'bell', durationMs = 6000) => {
-    setNotificationBanner({ title, message, icon });
+  const showInIslandNotification = ({ title, message = '', icon = 'bell', durationMs = 7000, action = null }) => {
+    setNotificationBanner({ title, message, icon, action });
     if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
     notificationTimeoutRef.current = setTimeout(() => {
       setNotificationBanner(null);
       notificationTimeoutRef.current = null;
     }, durationMs);
 
-    if (mode !== 'quick' && mode !== 'large') {
+    if (mode !== 'quick') {
       setMode('quick');
     }
   };
 
+
+
+  const handleNotificationClick = () => {
+    if (!notificationBanner) return;
+    const action = notificationBanner.action;
+
+    setNotificationBanner(null);
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current);
+      notificationTimeoutRef.current = null;
+    }
+
+    if (!action || !action.type) return;
+
+    if (action.type === 'timer') {
+      setMode('large');
+      setView('todo_timer');
+      return;
+    }
+
+    if (action.type === 'calendar') {
+      if (action.isoDate) setSelectedCalendarDate(action.isoDate);
+      setMode('large');
+      setView('todo_calendar_events');
+      return;
+    }
+
+    if (action.type === 'url' && action.url) {
+      window.electronAPI?.openExternal ? window.electronAPI.openExternal(action.url) : window.open(action.url, '_blank');
+    }
+  };
   const notifyUser = (title, body) => {
     if (!notificationsEnabled || typeof Notification === "undefined") return;
     try {
@@ -2288,31 +2332,37 @@ export default function Island() {
         </div>
       )}
 
-      {notificationBanner && !ringingEvent && mode !== 'large' && (
+      {notificationBanner && (
         <div style={{
           position: 'absolute',
           inset: 0,
-          zIndex: 245,
+          zIndex: 400,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          pointerEvents: 'none'
+          pointerEvents: 'auto'
         }}>
-          <div style={{
-            width: '96%',
-            height: 52,
-            borderRadius: 18,
-            background: 'rgba(0,0,0,0.75)',
-            border: '1px solid rgba(255,255,255,0.14)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '0 12px'
-          }}>
-            <div style={{ width: 24, height: 24, borderRadius: 999, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              {notificationBanner.icon === 'calendar' ? <Calendar size={13} color={textColor} /> : <TimerIcon size={13} color={textColor} />}
+          <div
+            onClick={handleNotificationClick}
+            style={{
+              width: '96%',
+              height: 54,
+              borderRadius: 18,
+              background: 'rgba(0,0,0,0.84)',
+              border: '1px solid rgba(255,255,255,0.16)',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 12px',
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{ width: 26 }} />
+            <div style={{ minWidth: 0, flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 12, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{notificationBanner.title}</div>
+              {notificationBanner.message && (
+                <div style={{ fontSize: 10, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{notificationBanner.message}</div>
+              )}
             </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 10, opacity: 0.7, fontWeight: 800 }}>{notificationBanner.title}</div>
-              <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{notificationBanner.message}</div>
+            <div style={{ width: 28, height: 28, borderRadius: 999, background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {notificationBanner.icon === 'calendar' ? <Calendar size={14} color={textColor} /> : <TimerIcon size={14} color={textColor} />}
             </div>
           </div>
         </div>
