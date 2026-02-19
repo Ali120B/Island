@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 
+const AVAILABLE_HOME_WIDGETS = [
+    { key: 'clock_media', label: 'Clock / Media' },
+    { key: 'todo', label: 'Todo List' },
+    { key: 'timer', label: 'Timer' },
+    { key: 'calendar', label: 'Calendar' },
+    { key: 'weather', label: 'Weather' }
+];
+
 export default function Settings() {
     const [batteryAlerts, setBatteryAlerts] = useState(localStorage.getItem("battery-alerts") !== "false");
     const [islandBorder, setIslandBorder] = useState(localStorage.getItem("island-border") === "true");
@@ -36,6 +44,14 @@ export default function Settings() {
     const [showTimerBorder, setShowTimerBorder] = useState(localStorage.getItem("show-timer-border") !== "false");
     const [timerBorderColor, setTimerBorderColor] = useState(localStorage.getItem("timer-border-color") || "#FAFAFA");
     const [updateDownloaded, setUpdateDownloaded] = useState(false);
+    const [homeWidgetsEnabled, setHomeWidgetsEnabled] = useState(() => {
+        try {
+            const parsed = JSON.parse(localStorage.getItem('home-widgets-enabled') || '["clock_media","weather"]');
+            return Array.isArray(parsed) ? parsed.slice(0, 4) : ['clock_media', 'weather'];
+        } catch {
+            return ['clock_media', 'weather'];
+        }
+    });
 
     useEffect(() => {
         if (window.electronAPI?.onUpdateDownloaded) {
@@ -103,6 +119,12 @@ export default function Settings() {
                     if (remoteSettings["google-calendar-client-secret"] !== undefined) setGoogleClientSecret(remoteSettings["google-calendar-client-secret"]);
                     if (remoteSettings["show-timer-border"] !== undefined) setShowTimerBorder(remoteSettings["show-timer-border"] !== "false");
                     if (remoteSettings["timer-border-color"] !== undefined) setTimerBorderColor(remoteSettings["timer-border-color"]);
+                    if (remoteSettings["home-widgets-enabled"] !== undefined) {
+                        try {
+                            const parsed = JSON.parse(remoteSettings["home-widgets-enabled"]);
+                            if (Array.isArray(parsed)) setHomeWidgetsEnabled(parsed.slice(0, 4));
+                        } catch {}
+                    }
                 }
             }
         };
@@ -171,7 +193,8 @@ export default function Settings() {
                 "google-calendar-client-id": googleClientId.trim(),
                 "google-calendar-client-secret": googleClientSecret.trim(),
                 "show-timer-border": String(showTimerBorder),
-                "timer-border-color": timerBorderColor
+                "timer-border-color": timerBorderColor,
+                "home-widgets-enabled": JSON.stringify(homeWidgetsEnabled.slice(0, 4))
             };
 
             // Update localStorage with current state values
@@ -196,6 +219,20 @@ export default function Settings() {
                 btn.style.background = '#4facfe';
             }, 2000);
         }
+    };
+
+    const toggleHomeWidget = (widgetKey) => {
+        const exists = homeWidgetsEnabled.includes(widgetKey);
+        let next = [...homeWidgetsEnabled];
+        if (exists) {
+            next = next.filter((key) => key !== widgetKey);
+            if (next.length === 0) return;
+        } else {
+            if (next.length >= 4) return;
+            next.push(widgetKey);
+        }
+        setHomeWidgetsEnabled(next);
+        saveSetting('home-widgets-enabled', JSON.stringify(next));
     };
 
     if (!localStorage.getItem("infinite-scroll")) {
@@ -580,6 +617,37 @@ export default function Settings() {
                             </div>
                         ))}
                         
+
+                        <div style={{ marginTop: 10 }}>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>Home Widgets (1-4)</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                {AVAILABLE_HOME_WIDGETS.map((widget) => {
+                                    const active = homeWidgetsEnabled.includes(widget.key);
+                                    return (
+                                        <button
+                                            key={widget.key}
+                                            onClick={() => toggleHomeWidget(widget.key)}
+                                            style={{
+                                                border: '1px solid rgba(255,255,255,0.12)',
+                                                borderRadius: 10,
+                                                background: active ? 'rgba(79,172,254,0.25)' : '#1f1f1f',
+                                                color: active ? '#fff' : '#a3a3a3',
+                                                padding: '8px 10px',
+                                                fontSize: 12,
+                                                fontWeight: 600,
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {widget.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <div style={{ marginTop: 8, fontSize: 11, opacity: 0.55 }}>
+                                Selected: {homeWidgetsEnabled.length}/4
+                            </div>
+                        </div>
+
                         <div style={{ marginTop: 10 }}>
                             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>Scroll Action</label>
                             <select 

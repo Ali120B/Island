@@ -6,6 +6,18 @@ import lowBatteryIcon from "./assets/images/lowbattery.png";
 import chargingIcon from "./assets/images/charging.png";
 import remainderSoundLocal from "./assets/audio/remainder.mp3";
 
+const AVAILABLE_HOME_WIDGETS = ['clock_media', 'todo', 'timer', 'calendar', 'weather'];
+
+const getEnabledHomeWidgets = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem('home-widgets-enabled') || '["clock_media","weather"]');
+    if (!Array.isArray(parsed)) return ['clock_media', 'weather'];
+    return parsed.filter((item) => AVAILABLE_HOME_WIDGETS.includes(item)).slice(0, 4);
+  } catch {
+    return ['clock_media', 'weather'];
+  }
+};
+
 //Get Date
 function formatDateShort(input) {
   const date = input ? new Date(input) : new Date();
@@ -289,6 +301,7 @@ export default function Island() {
   const [searchQuery, setSearchQuery] = useState('');
   const [embeddedWebUrl, setEmbeddedWebUrl] = useState('');
   const [webviewReloadKey, setWebviewReloadKey] = useState(0);
+  const [enabledHomeWidgets, setEnabledHomeWidgets] = useState(getEnabledHomeWidgets());
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState(null);
   
@@ -677,11 +690,6 @@ export default function Island() {
     return `${digits.slice(0, 2)}:${digits.slice(2, 4)}:${digits.slice(4, 6)}`;
   };
 
-  const getTodayIso = () => {
-    const d = new Date();
-    return toIsoDate(d.getFullYear(), d.getMonth(), d.getDate());
-  };
-
   const playTimerBeepFor10s = () => {
     console.log('Playing reminder audio from local file:', remainderSoundLocal);
     const audio = new Audio(remainderSoundLocal);
@@ -978,14 +986,18 @@ export default function Island() {
       }
     }
     if ((isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) && mode !== 'large') {
-      return isWatchHovered ? { width: 370, height: 43 } : { width: 230, height: 43 };
+      return isWatchHovered ? { width: 350, height: 39 } : { width: 210, height: 39 };
     }
     if (mode === "quick" || isPlaying) {
-      return { width: 300, height: 43 };
+      return { width: 270, height: 39 };
     }
-    return { width: 175, height: 43 };
+    return { width: 155, height: 39 };
   })();
 
+  const safeHomeWidgets = enabledHomeWidgets.length > 0 ? enabledHomeWidgets : ['clock_media'];
+  const widgetColumns = safeHomeWidgets.length <= 1 ? 1 : 2;
+  const widgetRows = safeHomeWidgets.length <= 2 ? 1 : 2;
+  const widgetGridTemplate = `repeat(${widgetRows}, minmax(0, 1fr)) / repeat(${widgetColumns}, minmax(0, 1fr))`;
   // Remove obsolete Quick Apps state
 
 
@@ -1123,6 +1135,7 @@ export default function Island() {
       setShowTimerBorder(localStorage.getItem("show-timer-border") !== "false");
       setTimerBorderColor(localStorage.getItem("timer-border-color") || "#FAFAFA");
       setNotchModeEnabled(localStorage.getItem("notch-mode") === "true");
+      setEnabledHomeWidgets(getEnabledHomeWidgets());
     };
 
     syncSettings();
@@ -3744,26 +3757,146 @@ export default function Island() {
             </div>
           </div>
 
-          {/* Big Clock Restoration */}
+          {/* Home Widgets */}
           <div style={{
-            textAlign: 'center',
-            transformOrigin: 'center center',
-            marginTop: 10,
-            fontFamily: clockFont === 'w95' ? '"MS Sans Serif", "Microsoft Sans Serif", sans-serif' :
-              clockFont === 'OpenRunde' ? '"OpenRunde", sans-serif' :
-                clockFont
+            width: '100%',
+            height: '100%',
+            padding: '48px 18px 16px 18px',
+            boxSizing: 'border-box',
+            display: 'grid',
+            gridTemplate: widgetGridTemplate,
+            gap: 10
           }}>
-            {clockStyle === 'analog' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15 }}>
-                <AnalogClock size={140} color={textColor} style={analogStyle} />
-                <h2 style={{ fontSize: 16, margin: 0, opacity: 0.5, letterSpacing: 0.5, fontWeight: 500 }}>{formatDateShort()}</h2>
-              </div>
-            ) : (
-              <>
-                <h1 style={{ fontSize: 72, margin: 0, lineHeight: 1, fontWeight: 700, letterSpacing: -2 }}>{time}</h1>
-                <h2 style={{ fontSize: 16, margin: '5px 0 0 0', opacity: 0.5, letterSpacing: 0.5, fontWeight: 500 }}>{formatDateShort()}</h2>
-              </>
-            )}
+            {safeHomeWidgets.map((widgetKey) => {
+              const todayEvents = Array.isArray(calendarEvents?.[getTodayIso()]) ? calendarEvents[getTodayIso()] : [];
+              const nextTodo = todos.find((todo) => !todo.completed);
+              const weatherStyle = getWeatherStyles();
+              const tileStyle = {
+                borderRadius: 16,
+                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'linear-gradient(165deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))',
+                backdropFilter: 'blur(10px)',
+                padding: 12,
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                minHeight: 0,
+                boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
+                position: 'relative',
+                overflow: 'hidden'
+              };
+
+              if (widgetKey === 'clock_media') {
+                return (
+                  <div key={widgetKey} style={tileStyle} onClick={() => setView('music')}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 700 }}>CLOCK / MEDIA</span>
+                      <Music size={14} opacity={0.7} />
+                    </div>
+                    {isPlaying || spotifyTrack?.name ? (
+                      <>
+                        <div style={{ position: 'absolute', top: 12, left: 12, fontSize: 11, opacity: 0.7, fontWeight: 700 }}>{time}</div>
+                        <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{spotifyTrack?.name || 'Now Playing'}</div>
+                        <div style={{ fontSize: 11, opacity: 0.65, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{spotifyTrack?.artist || 'System Media'}</div>
+                      </>
+                    ) : (
+                      <div style={{ textAlign: 'center', marginTop: 8 }}>
+                        <div style={{ fontSize: 34, fontWeight: 700, lineHeight: 1 }}>{time}</div>
+                        <div style={{ fontSize: 11, opacity: 0.65, marginTop: 4 }}>{formatDateShort()}</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              if (widgetKey === 'todo') {
+                return (
+                  <div key={widgetKey} style={tileStyle} onClick={() => setView('todo')}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 700 }}>TODO</span>
+                      <List size={14} opacity={0.7} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                      {todos.slice(0, 3).map((todo) => (
+                        <div key={todo.id} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTodo(todo.id);
+                            }}
+                            style={{ width: 14, height: 14, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.45)', background: todo.completed ? '#fff' : 'transparent', cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: 11, opacity: todo.completed ? 0.45 : 0.85, textDecoration: todo.completed ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{todo.text}</span>
+                        </div>
+                      ))}
+                      {todos.length === 0 && <span style={{ fontSize: 11, opacity: 0.5 }}>No todos yet</span>}
+                    </div>
+                    <div style={{ fontSize: 10, opacity: 0.55 }}>Next: {nextTodo?.text || 'All clear'}</div>
+                  </div>
+                );
+              }
+
+              if (widgetKey === 'timer') {
+                return (
+                  <div key={widgetKey} style={tileStyle} onClick={() => setView('todo_timer')}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 700 }}>TIMER</span>
+                      <TimerIcon size={14} opacity={0.7} />
+                    </div>
+                    <div style={{ fontSize: 30, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{formatTimer(timerSeconds)}</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isTimerRunning && timerSeconds > 0) setTimerTotalSeconds(timerSeconds);
+                          setIsTimerRunning(!isTimerRunning);
+                        }}
+                        style={{ border: 'none', borderRadius: 8, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}
+                      >
+                        {isTimerRunning ? 'Pause' : 'Start'}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsTimerRunning(false);
+                          setTimerSeconds(0);
+                        }}
+                        style={{ border: 'none', borderRadius: 8, background: 'rgba(239,68,68,0.22)', color: '#fff', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (widgetKey === 'calendar') {
+                return (
+                  <div key={widgetKey} style={tileStyle} onClick={() => setView('todo_calendar')}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 700 }}>CALENDAR</span>
+                      <Calendar size={14} opacity={0.7} />
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>{formatDateShort()}</div>
+                    <div style={{ fontSize: 11, opacity: 0.8 }}>{todayEvents.length} event{todayEvents.length === 1 ? '' : 's'} today</div>
+                    <div style={{ fontSize: 10, opacity: 0.55, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{todayEvents[0]?.text || 'No events scheduled'}</div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={widgetKey} style={{ ...tileStyle, background: weatherStyle.bgColor.includes('gradient') ? weatherStyle.bgColor : `linear-gradient(165deg, ${weatherStyle.bgColor}, rgba(0,0,0,0.35))` }} onClick={() => setView('weather')}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, opacity: 0.8, fontWeight: 700 }}>WEATHER</span>
+                    <Cloud size={14} opacity={0.9} />
+                  </div>
+                  <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1 }}>{weather ? `${weather}°` : '--°'}</div>
+                  <div style={{ fontSize: 12, opacity: 0.9 }}>{weatherCondition}</div>
+                  <div style={{ fontSize: 10, opacity: 0.75 }}>Tap for details</div>
+                </div>
+              );
+            })}
           </div>
         </div>
         {/* Music View Redesign */}
@@ -3938,22 +4071,13 @@ export default function Island() {
               gap: 8,
               height: 360
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                <div style={{ fontSize: 11, opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{embeddedWebUrl}</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    onClick={() => window.electronAPI?.openExternal ? window.electronAPI.openExternal(embeddedWebUrl) : window.open(embeddedWebUrl, "_blank")}
-                    style={{ border: 'none', borderRadius: 10, padding: '5px 10px', background: 'rgba(255,255,255,0.12)', color: '#fff', fontSize: 10, cursor: 'pointer' }}
-                  >
-                    Open External
-                  </button>
-                  <button
-                    onClick={() => setEmbeddedWebUrl('')}
-                    style={{ border: 'none', borderRadius: 10, padding: '5px 10px', background: 'rgba(239,68,68,0.25)', color: '#fff', fontSize: 10, cursor: 'pointer' }}
-                  >
-                    Close
-                  </button>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={() => setEmbeddedWebUrl('')}
+                  style={{ border: 'none', borderRadius: 10, padding: '4px 9px', background: 'rgba(239,68,68,0.25)', color: '#fff', fontSize: 10, cursor: 'pointer' }}
+                >
+                  Close
+                </button>
               </div>
               <webview
                 key={webviewReloadKey}
