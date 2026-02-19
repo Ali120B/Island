@@ -816,6 +816,7 @@ export default function Island() {
       action: { type: "calendar", isoDate }
     });
 
+    if (mode !== 'quick') {
     // Merge-resolution choice: reminders should surface in quick mode, not large mode.
     if (mode !== 'quick') {
 
