@@ -991,7 +991,8 @@ export default function Island() {
           if (embeddedWebUrl) return { width: 760, height: 540 };
           return { width: 420, height: searchResults.length > 0 ? (searchResults.length * 65 + 100) : 180 };
         case 'settings': return { width: 420, height: 380 };
-        default: return { width: 400, height: 200 };
+        case 'home': return { width: 560, height: 260 };
+        default: return { width: 480, height: 240 };
       }
     }
     if ((isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) && mode !== 'large') {
@@ -3894,26 +3895,26 @@ export default function Island() {
 
           {/* Clock on Left */}
           <div style={{ position: 'absolute', top: 15, left: 25, right: 25, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pointerEvents: 'none' }}>
-            {/* Weather on Left */}
+            {/* Settings on Left */}
             <div style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={() => setView('weather')}>
-                <Cloud size={18} color={textColor} />
-                <span style={{ fontSize: 16, fontWeight: 500 }}>{weather ? `${weather}°` : "--"}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={() => setShowInIslandSettings((v) => !v)}>
+                <Settings size={17} color={textColor} />
+                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.78 }}>Settings</span>
               </div>
             </div>
 
             {/* Battery on Right */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, pointerEvents: 'auto' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.9 }}>{percent}%</span>
-              <div style={{ width: 22, height: 12, position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'auto' }}>
+              <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>{percent}%</span>
+              <div style={{ width: 18, height: 10, position: 'relative' }}>
                 {charging ? (
                   <img src={chargingIcon} alt="Charging" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 ) : percent <= 20 ? (
                   <img src={lowBatteryIcon} alt="Low Battery" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 ) : (
                   <div style={{
-                    width: '100%', height: '100%', border: `1.5px solid ${textColor}`,
-                    borderRadius: 2.5, padding: 1, position: 'relative'
+                    width: '100%', height: '100%', border: `1px solid ${textColor}`,
+                    borderRadius: 2, padding: 1, position: 'relative'
                   }}>
                     <div style={{
                       width: `${percent}%`, height: '100%', background: percent <= 20 ? '#ef4444' : percent <= 60 ? '#fbbf24' : '#4ade80',
@@ -3921,7 +3922,7 @@ export default function Island() {
                     }} />
                     <div style={{
                       position: 'absolute', right: -3, top: '50%', transform: 'translateY(-50%)',
-                      width: 2, height: 4, background: textColor, borderRadius: '0 1px 1px 0'
+                      width: 1.5, height: 4, background: textColor, borderRadius: '0 1px 1px 0'
                     }} />
                   </div>
                 )}
@@ -3933,7 +3934,7 @@ export default function Island() {
           <div style={{
             width: '100%',
             height: '100%',
-            padding: '48px 18px 16px 18px',
+            padding: '46px 16px 14px 16px',
             boxSizing: 'border-box',
             display: 'grid',
             gridTemplate: widgetGridTemplate,
@@ -3944,17 +3945,17 @@ export default function Island() {
               const nextTodo = todos.find((todo) => !todo.completed);
               const weatherStyle = getWeatherStyles();
               const tileStyle = {
-                borderRadius: 16,
-                border: '1px solid rgba(255,255,255,0.08)',
-                background: 'linear-gradient(165deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))',
-                backdropFilter: 'blur(10px)',
-                padding: 12,
+                borderRadius: 24,
+                border: '1px solid rgba(255,255,255,0.07)',
+                background: 'linear-gradient(180deg, rgba(24,24,28,0.95), rgba(14,14,17,0.92))',
+                backdropFilter: 'blur(18px)',
+                padding: 14,
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
                 minHeight: 0,
-                boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
+                boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
                 position: 'relative',
                 overflow: 'hidden'
               };
@@ -3963,12 +3964,12 @@ export default function Island() {
                 return (
                   <div key={widgetKey} style={tileStyle} onClick={() => setView('music')}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 700 }}>CLOCK / MEDIA</span>
-                      <Music size={14} opacity={0.7} />
+                      <span style={{ fontSize: 10, opacity: 0.7, fontWeight: 700, letterSpacing: 0.3 }}>CLOCK / MEDIA</span>
+                      <Music size={14} opacity={0.55} />
                     </div>
                     {isPlaying || spotifyTrack?.name ? (
                       <>
-                        <div style={{ position: 'absolute', top: 12, left: 12, fontSize: 11, opacity: 0.7, fontWeight: 700 }}>{time}</div>
+                        <div style={{ fontSize: 30, fontWeight: 700, lineHeight: 1, textAlign: 'center', marginTop: 4 }}>{time}</div>
                         <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{spotifyTrack?.name || 'Now Playing'}</div>
                         <div style={{ fontSize: 11, opacity: 0.65, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{spotifyTrack?.artist || 'System Media'}</div>
                       </>
@@ -4017,7 +4018,25 @@ export default function Island() {
                       <TimerIcon size={14} opacity={0.7} />
                     </div>
                     <div style={{ fontSize: 30, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{formatTimer(timerSeconds)}</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTimerSeconds((prev) => Math.max(0, prev - 60));
+                        }}
+                        style={{ border: 'none', borderRadius: 8, background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}
+                      >
+                        -1m
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTimerSeconds((prev) => Math.min(359940, prev + 60));
+                        }}
+                        style={{ border: 'none', borderRadius: 8, background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}
+                      >
+                        +1m
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -4026,7 +4045,7 @@ export default function Island() {
                         }}
                         style={{ border: 'none', borderRadius: 8, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}
                       >
-                        {isTimerRunning ? 'Pause' : 'Start'}
+                        {isTimerRunning ? 'Stop' : 'Start'}
                       </button>
                       <button
                         onClick={(e) => {
@@ -4058,7 +4077,7 @@ export default function Island() {
               }
 
               return (
-                <div key={widgetKey} style={{ ...tileStyle, background: weatherStyle.bgColor.includes('gradient') ? weatherStyle.bgColor : `linear-gradient(165deg, ${weatherStyle.bgColor}, rgba(0,0,0,0.35))` }} onClick={() => setView('weather')}>
+                <div key={widgetKey} style={{ ...tileStyle, background: weatherStyle.bgColor.includes('gradient') ? weatherStyle.bgColor : `linear-gradient(165deg, rgba(26,26,30,0.95), ${weatherStyle.bgColor})` }} onClick={() => setView('weather')}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, opacity: 0.8, fontWeight: 700 }}>WEATHER</span>
                     <Cloud size={14} opacity={0.9} />
