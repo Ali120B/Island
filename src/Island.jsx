@@ -2492,7 +2492,7 @@ export default function Island() {
         </div>
       )}
 
-      {/* Persistent Clock and Battery Status (Top-Right on non-home views) */}
+      {/* Persistent Clock Status (Top-Right on non-home views) */}
       {view !== 'dropbox' && !showInIslandSettings && (
         <div style={{
           position: 'absolute', top: 15, right: 25, zIndex: 100,
@@ -2501,33 +2501,6 @@ export default function Island() {
           transition: 'all 0.5s ease',
           pointerEvents: 'none'
         }}>
-          {(view !== 'home') && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, pointerEvents: 'auto' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.9 }}>{percent}%</span>
-              <div style={{ width: 22, height: 12, position: 'relative' }}>
-                {charging ? (
-                  <img src={chargingIcon} alt="Charging" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                ) : percent <= 20 ? (
-                  <img src={lowBatteryIcon} alt="Low Battery" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                ) : (
-                  <div style={{
-                    width: '100%', height: '100%', border: `1.5px solid ${textColor}`,
-                    borderRadius: 2.5, padding: 1, position: 'relative'
-                  }}>
-                    <div style={{
-                      width: `${percent}%`, height: '100%', background: percent <= 20 ? '#ef4444' : percent <= 60 ? '#fbbf24' : '#4ade80',
-                      borderRadius: 1
-                    }} />
-                    <div style={{
-                      position: 'absolute', right: -3, top: '50%', transform: 'translateY(-50%)',
-                      width: 2, height: 4, background: textColor, borderRadius: '0 1px 1px 0'
-                    }} />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Transitioning Clock: Only show here if NOT home (now on the right) */}
           <div style={{
             opacity: view !== 'home' ? 1 : 0,
@@ -3893,48 +3866,11 @@ export default function Island() {
             </div>
           )}
 
-          {/* Clock on Left */}
-          <div style={{ position: 'absolute', top: 15, left: 25, right: 25, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pointerEvents: 'none' }}>
-            {/* Settings on Left */}
-            <div style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={() => setShowInIslandSettings((v) => !v)}>
-                <Settings size={17} color={textColor} />
-                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.78 }}>Settings</span>
-              </div>
-            </div>
-
-            {/* Battery on Right */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'auto' }}>
-              <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>{percent}%</span>
-              <div style={{ width: 18, height: 10, position: 'relative' }}>
-                {charging ? (
-                  <img src={chargingIcon} alt="Charging" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                ) : percent <= 20 ? (
-                  <img src={lowBatteryIcon} alt="Low Battery" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                ) : (
-                  <div style={{
-                    width: '100%', height: '100%', border: `1px solid ${textColor}`,
-                    borderRadius: 2, padding: 1, position: 'relative'
-                  }}>
-                    <div style={{
-                      width: `${percent}%`, height: '100%', background: percent <= 20 ? '#ef4444' : percent <= 60 ? '#fbbf24' : '#4ade80',
-                      borderRadius: 1
-                    }} />
-                    <div style={{
-                      position: 'absolute', right: -3, top: '50%', transform: 'translateY(-50%)',
-                      width: 1.5, height: 4, background: textColor, borderRadius: '0 1px 1px 0'
-                    }} />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
           {/* Home Widgets */}
           <div style={{
             width: '100%',
             height: '100%',
-            padding: '46px 16px 14px 16px',
+            padding: '16px 16px 14px 16px',
             boxSizing: 'border-box',
             display: 'grid',
             gridTemplate: widgetGridTemplate,
