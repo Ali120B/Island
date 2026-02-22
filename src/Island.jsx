@@ -1938,7 +1938,7 @@ export default function Island() {
             ? "#FFFFFF #808080 #808080 #FFFFFF"
             : "none",
         borderRadius: notchModeEnabled
-          ? (mode === 'large' ? '28px 28px 20px 20px' : mode === 'quick' ? '24px 24px 18px 18px' : '22px 22px 16px 16px')
+          ? (mode === 'large' ? '12px 12px 24px 24px' : mode === 'quick' ? '10px 10px 20px 20px' : '8px 8px 16px 16px')
           : (mode === "large" && theme === "win95"
             ? 0
             : (mode === "large" || mode === "quick")
