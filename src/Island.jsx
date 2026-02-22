@@ -970,6 +970,18 @@ export default function Island() {
     }
   }, [mode]);
 
+  const safeHomeWidgets = enabledHomeWidgets.length > 0 ? enabledHomeWidgets : ['clock_media'];
+  const homeWidgetCount = safeHomeWidgets.length;
+  const widgetColumns = homeWidgetCount <= 1 ? 1 : 2;
+  const widgetRows = homeWidgetCount <= 2 ? 1 : 2;
+  const widgetGridTemplate = `repeat(${widgetRows}, minmax(0, 1fr)) / repeat(${widgetColumns}, minmax(0, 1fr))`;
+
+  const homeDimensions = (() => {
+    if (homeWidgetCount <= 1) return { width: 330, height: 250 };
+    if (homeWidgetCount === 2) return { width: 560, height: 250 };
+    return { width: 560, height: 290 };
+  })();
+
   // Dynamic Width/Height based on mode and view - INCREASED FOR AI/DROPBOX
   const { width, height } = (() => {
     if (showInIslandSettings && mode === 'large') {
@@ -991,7 +1003,7 @@ export default function Island() {
           if (embeddedWebUrl) return { width: 760, height: 540 };
           return { width: 420, height: searchResults.length > 0 ? (searchResults.length * 65 + 100) : 180 };
         case 'settings': return { width: 420, height: 380 };
-        case 'home': return { width: 560, height: 260 };
+        case 'home': return homeDimensions;
         default: return { width: 480, height: 240 };
       }
     }
@@ -1004,10 +1016,6 @@ export default function Island() {
     return { width: 155, height: 39 };
   })();
 
-  const safeHomeWidgets = enabledHomeWidgets.length > 0 ? enabledHomeWidgets : ['clock_media'];
-  const widgetColumns = safeHomeWidgets.length <= 1 ? 1 : 2;
-  const widgetRows = safeHomeWidgets.length <= 2 ? 1 : 2;
-  const widgetGridTemplate = `repeat(${widgetRows}, minmax(0, 1fr)) / repeat(${widgetColumns}, minmax(0, 1fr))`;
   // Remove obsolete Quick Apps state
 
 
@@ -3876,10 +3884,14 @@ export default function Island() {
             gridTemplate: widgetGridTemplate,
             gap: 10
           }}>
-            {safeHomeWidgets.map((widgetKey) => {
+            {safeHomeWidgets.map((widgetKey, widgetIndex) => {
               const todayEvents = Array.isArray(calendarEvents?.[getTodayIso()]) ? calendarEvents[getTodayIso()] : [];
               const nextTodo = todos.find((todo) => !todo.completed);
               const weatherStyle = getWeatherStyles();
+              const isCenteredThirdWidget = homeWidgetCount === 3 && widgetIndex === 2;
+              const widgetPositionStyle = isCenteredThirdWidget
+                ? { gridColumn: '1 / -1', justifySelf: 'center', width: 'calc(50% - 5px)' }
+                : undefined;
               const tileStyle = {
                 borderRadius: 24,
                 border: '1px solid rgba(255,255,255,0.07)',
@@ -3893,7 +3905,8 @@ export default function Island() {
                 minHeight: 0,
                 boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
                 position: 'relative',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                ...widgetPositionStyle
               };
 
               if (widgetKey === 'clock_media') {
