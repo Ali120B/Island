@@ -25,12 +25,11 @@ The Dynamic Island for Windows.
 - ✅ **Standby & Stealth Modes**: Configurable visibility and persistence settings.
 - ✅ **Scroll Actions**: Control volume or brightness directly by scrolling over the island.
 - ✅ **Cross-Monitor Support**: Syncs across all your desktops and monitors.
-- ✅ **Google Calendar Sync**: Connect your Google account in settings and pull upcoming events directly into Island calendar.
 - ✅ **Notch Mode**: Make idle, hover, and expanded states follow a notch-like silhouette.
 
 ### Todo
-- Add notification support - In progress
 - webview in url bar
+- **Google Calendar Sync**: Connect your Google account in settings and pull upcoming events directly into Island calendar.
 
 
 ## Google Calendar setup
