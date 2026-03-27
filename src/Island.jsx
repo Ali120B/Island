@@ -10,11 +10,21 @@ const AVAILABLE_HOME_WIDGETS = ['clock_media', 'todo', 'timer', 'calendar', 'wea
 
 const getEnabledHomeWidgets = () => {
   try {
-    const parsed = JSON.parse(localStorage.getItem('home-widgets-enabled') || '["clock_media","weather"]');
-    if (!Array.isArray(parsed)) return ['clock_media', 'weather'];
-    return parsed.filter((item) => AVAILABLE_HOME_WIDGETS.includes(item)).slice(0, 4);
+    const parsed = JSON.parse(localStorage.getItem('home-widgets-enabled') || '["clock_media","weather","todo"]');
+    if (!Array.isArray(parsed)) return ['clock_media', 'weather', 'todo'];
+    let enabled = parsed.filter((item) => AVAILABLE_HOME_WIDGETS.includes(item)).slice(0, 4);
+    if (enabled.length < 3) {
+      // Ensure at least 3 widgets are enabled if possible
+      const defaults = ['clock_media', 'weather', 'todo'];
+      for (const d of defaults) {
+        if (!enabled.includes(d) && enabled.length < 3) {
+          enabled.push(d);
+        }
+      }
+    }
+    return enabled;
   } catch {
-    return ['clock_media', 'weather'];
+    return ['clock_media', 'weather', 'todo'];
   }
 };
 
@@ -205,6 +215,9 @@ export default function Island() {
   const [mode, setMode] = useState("still"); // still, quick, large
   const [view, setView] = useState("home"); // home, music, ai, weather, search
   const lastInteractionRef = useRef(Date.now());
+  const interact = useRef(() => {
+    lastInteractionRef.current = Date.now();
+  }).current;
   const [autoRevertTime, setAutoRevertTime] = useState(Number(localStorage.getItem("auto-revert-time") || 5000));
 
   const [percent, setPercent] = useState(null);
@@ -292,6 +305,14 @@ export default function Island() {
   const [clipboardHistory, setClipboardHistory] = useState([]);
   const [todos, setTodos] = useState([]);
   const [todoInput, setTodoInput] = useState("");
+  const [todoCategories, setTodoCategories] = useState(() => {
+    const saved = localStorage.getItem("todo-categories");
+    return saved ? JSON.parse(saved) : ["All", "Personal", "School"];
+  });
+  const [activeTodoCategory, setActiveTodoCategory] = useState("All");
+  const [isEditingTodoCategories, setIsEditingTodoCategories] = useState(false);
+  const [isAddingTodoCategory, setIsAddingTodoCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
   const [weatherDetails, setWeatherDetails] = useState(null);
   const [pinnedUrls, setPinnedUrls] = useState(JSON.parse(localStorage.getItem("pinned-urls") || '["https://youtube.com", "https://whatsapp.com", "https://notion.so", "https://drive.google.com"]'));
   const [isEditingUrls, setIsEditingUrls] = useState(false);
@@ -301,6 +322,11 @@ export default function Island() {
   const [searchQuery, setSearchQuery] = useState('');
   const [embeddedWebUrl, setEmbeddedWebUrl] = useState('');
   const [webviewReloadKey, setWebviewReloadKey] = useState(0);
+  const webviewRef = useRef(null);
+  const aiMessagesRef = useRef(null);
+  const [showScrollDownButton, setShowScrollDownButton] = useState(false);
+  const mainSearchInputRef = useRef(null);
+  const [isMainInputFocused, setIsMainInputFocused] = useState(false);
   const [enabledHomeWidgets, setEnabledHomeWidgets] = useState(getEnabledHomeWidgets());
   const [googleClientId, setGoogleClientId] = useState(localStorage.getItem("google-calendar-client-id") || "");
   const [googleClientSecret, setGoogleClientSecret] = useState(localStorage.getItem("google-calendar-client-secret") || "");
@@ -308,6 +334,10 @@ export default function Island() {
   const [googleMessage, setGoogleMessage] = useState("");
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState(null);
+  const [homePageMode, setHomePageMode] = useState(localStorage.getItem("home-page-mode") || "normal");
+  const [isReverting, setIsReverting] = useState(false);
+  const dragStartPos = useRef(null);
+  const [isDraggingPage, setIsDraggingPage] = useState(false);
   
   
   const [layoutOrder, setLayoutOrder] = useState(() => {
@@ -317,8 +347,8 @@ export default function Island() {
       hiddenPages: [],
       home: ['clipboard', 'dropbox'],
       todo: ['calendar', 'timer'],
-      weather: ['details', 'main'],
-      search: ['urls', 'main']
+      weather: ['main', 'details'],
+      search: ['main', 'urls']
     };
     if (!saved) return defaultOrder;
     const parsed = JSON.parse(saved);
@@ -338,14 +368,21 @@ export default function Island() {
     hiddenPages = hiddenPages.filter(p => p !== 'app_shortcuts');
 
 
+    // Ensure weather and search sub-views are at the bottom (index 1)
+    let weatherOrder = parsed.weather || defaultOrder.weather;
+    if (weatherOrder[0] === 'details') weatherOrder = ['main', 'details'];
+    
+    let searchOrder = parsed.search || defaultOrder.search;
+    if (searchOrder[0] === 'urls') searchOrder = ['main', 'urls'];
+
     // Ensure all keys exist
     return {
       pages: pages,
       hiddenPages: hiddenPages,
       home: parsed.home || defaultOrder.home,
       todo: parsed.todo || defaultOrder.todo,
-      weather: parsed.weather || defaultOrder.weather,
-      search: parsed.search || defaultOrder.search
+      weather: weatherOrder,
+      search: searchOrder
     };
   });
   const [expandedSections, setExpandedSections] = useState({ pages: true });
@@ -600,12 +637,28 @@ export default function Island() {
 
   const handleAddTodo = async () => {
     if (!todoInput.trim()) return;
-    const newTodos = [...todos, { id: Date.now(), text: todoInput, completed: false }];
+    const category = activeTodoCategory === "All" ? (todoCategories[1] || "Personal") : activeTodoCategory;
+    const newTodos = [...todos, { id: Date.now(), text: todoInput, completed: false, category }];
     setTodos(newTodos);
     setTodoInput("");
     if (window.electronAPI?.saveTodo) {
       await window.electronAPI.saveTodo(newTodos);
     }
+  };
+
+  const addTodoCategory = (name) => {
+    if (!name.trim() || todoCategories.includes(name)) return;
+    const next = [...todoCategories, name];
+    setTodoCategories(next);
+    localStorage.setItem("todo-categories", JSON.stringify(next));
+  };
+
+  const removeTodoCategory = (name) => {
+    if (name === "All") return;
+    const next = todoCategories.filter(c => c !== name);
+    setTodoCategories(next);
+    localStorage.setItem("todo-categories", JSON.stringify(next));
+    if (activeTodoCategory === name) setActiveTodoCategory("All");
   };
 
   const loadCalendarEvents = async () => {
@@ -742,9 +795,9 @@ export default function Island() {
     }
     if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false, false);
 
-    // Audio for events removed per user request
-    // const stopBeep = playTimerBeepFor10s();
-    // stopBeepRef.current = stopBeep;
+    // Audio for events enabled per user request
+    const stopBeep = playTimerBeepFor10s();
+    stopBeepRef.current = stopBeep;
 
     if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
     ringIntervalRef.current = setInterval(() => {
@@ -871,6 +924,16 @@ export default function Island() {
   }, []);
 
   useEffect(() => {
+    const handleGlobalMouseUp = (e) => {
+      if (isDraggingPage) {
+        handlePageDragEnd(e);
+      }
+    };
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, [isDraggingPage, view, mode]);
+
+  useEffect(() => {
     loadCalendarEvents();
   }, []);
 
@@ -977,9 +1040,16 @@ export default function Island() {
   const widgetGridTemplate = `repeat(${widgetRows}, minmax(0, 1fr)) / repeat(${widgetColumns}, minmax(0, 1fr))`;
 
   const homeDimensions = (() => {
+<<<<<<< Updated upstream
     if (homeWidgetCount <= 1) return { width: 330, height: 250 };
     if (homeWidgetCount === 2) return { width: 560, height: 250 };
     return { width: 560, height: 290 };
+=======
+    if (homePageMode === 'normal') return { width: 350, height: 210 };
+    if (homeWidgetCount <= 1) return { width: 350, height: 210 };
+    if (homeWidgetCount === 2) return { width: 570, height: 210 };
+    return { width: 570, height: 250 };
+>>>>>>> Stashed changes
   })();
 
   // Dynamic Width/Height based on mode and view - INCREASED FOR AI/DROPBOX
@@ -1008,19 +1078,52 @@ export default function Island() {
       }
     }
     if ((isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) && mode !== 'large') {
-      return isWatchHovered ? { width: 350, height: 39 } : { width: 210, height: 39 };
+      return isWatchHovered ? { width: 350, height: notchModeEnabled ? 35 : 38 } : { width: 210, height: notchModeEnabled ? 35 : 38 };
     }
     if (mode === "quick" || isPlaying) {
-      return { width: 270, height: 39 };
+      return { width: 260, height: notchModeEnabled ? 35 : 38 };
     }
-    return { width: 155, height: 39 };
+    return { width: 150, height: notchModeEnabled ? 35 : 38 };
   })();
 
   // Remove obsolete Quick Apps state
 
 
-  //User age
   useEffect(() => {
+    const webview = webviewRef.current;
+    if (!webview) return;
+
+    const handleNavigate = (e) => {
+      setSearchQuery(e.url);
+      interact();
+    };
+
+    const handleTitleChange = (e) => {
+      // If we are playing media, the title often changes to show playback status
+      // but we mainly care about SMTC for the media player page.
+      // However, we can use this to force a refresh of the media info if needed.
+      interact();
+    };
+
+    const handleDomReady = () => {
+      interact();
+    };
+
+    webview.addEventListener('did-navigate', handleNavigate);
+    webview.addEventListener('did-navigate-in-page', handleNavigate);
+    webview.addEventListener('page-title-updated', handleTitleChange);
+    webview.addEventListener('dom-ready', handleDomReady);
+
+    return () => {
+      webview.removeEventListener('did-navigate', handleNavigate);
+      webview.removeEventListener('did-navigate-in-page', handleNavigate);
+      webview.removeEventListener('page-title-updated', handleTitleChange);
+      webview.removeEventListener('dom-ready', handleDomReady);
+    };
+  }, [embeddedWebUrl, webviewReloadKey]);
+
+  useEffect(() => {
+    // User age
     if (!localStorage.getItem('newuser')) {
       localStorage.setItem('newuser', 'true');
     }
@@ -1030,18 +1133,20 @@ export default function Island() {
   // Handle Window Blur/Focus
   useEffect(() => {
     const handleBlur = () => {
-      if (autoRevertTime <= 0 || isDraggingOutRef.current) return;
+      if (autoRevertTime <= 0 || isDraggingOutRef.current || embeddedWebUrl) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         // Always close in-island settings on blur
         setShowInIslandSettings(false);
 
-        if (view !== 'home' && view !== 'dropbox') {
+        if (view !== 'home' && view !== 'dropbox' && !embeddedWebUrl) {
+          setIsReverting(true);
           setMode('still');
           setView('home');
           setBrowserSearch('');
           setSearchQuery('');
           setSearchResults([]);
+          setTimeout(() => setIsReverting(false), 500);
         }
       }, autoRevertTime);
     };
@@ -1059,23 +1164,25 @@ export default function Island() {
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [view, autoRevertTime]);
+  }, [view, autoRevertTime, embeddedWebUrl]);
 
   // Inactivity Revert (while focused)
   useEffect(() => {
-    if (view === 'home' || view === 'dropbox' || autoRevertTime <= 0 || isDraggingOut) return;
+    if (view === 'home' || view === 'dropbox' || autoRevertTime <= 0 || isDraggingOut || embeddedWebUrl) return;
 
     const checkInactivity = () => {
       const diff = Date.now() - lastInteractionRef.current;
-      if (diff >= autoRevertTime) {
+      if (diff >= autoRevertTime && !embeddedWebUrl) {
+        setIsReverting(true);
         setView('home');
         setMode('still');
+        setTimeout(() => setIsReverting(false), 500);
       }
     };
 
     const interval = setInterval(checkInactivity, 1000);
     return () => clearInterval(interval);
-  }, [view, autoRevertTime]);
+  }, [view, autoRevertTime, embeddedWebUrl]);
 
   // Sync settings across windows
   // localStorage defaults and sync
@@ -1156,6 +1263,10 @@ export default function Island() {
       setEnabledHomeWidgets(getEnabledHomeWidgets());
       setGoogleClientId(localStorage.getItem("google-calendar-client-id") || "");
       setGoogleClientSecret(localStorage.getItem("google-calendar-client-secret") || "");
+<<<<<<< Updated upstream
+=======
+      setHomePageMode(localStorage.getItem("home-page-mode") || "normal");
+>>>>>>> Stashed changes
     };
 
     syncSettings();
@@ -1176,7 +1287,11 @@ export default function Island() {
     let next = [...enabledHomeWidgets];
     if (exists) {
       next = next.filter((key) => key !== widgetKey);
+<<<<<<< Updated upstream
       if (next.length === 0) return;
+=======
+      if (next.length < 3) return; // Enforce min 3 widgets
+>>>>>>> Stashed changes
     } else {
       if (next.length >= 4) return;
       next.push(widgetKey);
@@ -1386,6 +1501,32 @@ export default function Island() {
     }
   };
 
+  const scrollToBottomAI = () => {
+    if (aiMessagesRef.current) {
+      aiMessagesRef.current.scrollTo({
+        top: aiMessagesRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+      setShowScrollDownButton(false);
+    }
+  };
+
+  useEffect(() => {
+    if (view === 'ai' && !showScrollDownButton) {
+      if (aiMessagesRef.current) {
+        aiMessagesRef.current.scrollTop = aiMessagesRef.current.scrollHeight;
+      }
+    }
+  }, [messages, view]);
+
+  const handleAIScroll = () => {
+     if (!aiMessagesRef.current) return;
+     const { scrollTop, scrollHeight, clientHeight } = aiMessagesRef.current;
+     // Increased tolerance for bottom detection to prevent flickering or false positives
+     const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 15;
+     setShowScrollDownButton(!isAtBottom);
+   };
+
   const handleDeleteClipboardItem = (e, item) => {
     e.stopPropagation();
     if (window.electronAPI?.deleteClipboardItem) {
@@ -1570,10 +1711,7 @@ export default function Island() {
 
   // Get Island Details (Copyright/Version)
   const getBatteryIcon = () => {
-    const iconColor = percent >= 60 ? "#4ade80" : percent >= 30 ? "#fbbf24" : "#ef4444";
-    if (percent >= 90) return <BatteryFull size={14} color={iconColor} />;
-    if (percent >= 40) return <BatteryMedium size={14} color={iconColor} />;
-    return <BatteryLow size={14} color={iconColor} />;
+    return <Battery size={14} color="#fff" fill="#fff" />;
   };
 
   const formatTimer = (seconds) => {
@@ -1634,7 +1772,55 @@ export default function Island() {
       }
     };
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setBatteryAlertsEnabled(localStorage.getItem("battery-alerts") !== "false");
+      setIslandBorderEnabled(localStorage.getItem("island-border") === "true");
+      setIslandBorderColor(localStorage.getItem("island-border-color") || "#FAFAFA");
+      setIslandBorderThickness(Number(localStorage.getItem("island-border-thickness") || 1));
+      setIslandBorderStyle(localStorage.getItem("island-border-style") || "solid");
+      setAutoRevertTime(Number(localStorage.getItem("auto-revert-time") || 5000));
+      setStandbyEnabled(localStorage.getItem("standby-mode") === "true");
+      setLargeStandbyEnabled(localStorage.getItem("large-standby-mode") === "true");
+      sethideNotActiveIslandEnabled(localStorage.getItem("hide-island-notactive") === "true");
+      setHourFormat((localStorage.getItem("hour-format") || "12-hr") === "12-hr");
+      setweatherUnit(localStorage.getItem("weather-unit") || "f");
+      setTheme(localStorage.getItem("theme") || "default");
+      setBgColor(localStorage.getItem("bg-color") || "#000000");
+      setTextColor(localStorage.getItem("text-color") || "#FAFAFA");
+      setBgImage(localStorage.getItem("bg-image") || "");
+      setOpacity(Number(localStorage.getItem("island-opacity") || 0.64));
+      setFontSize(Number(localStorage.getItem("island-font-size") || 14));
+      setCornerRadius(Number(localStorage.getItem("island-corner-radius") || 25));
+      setIslandPosition(Number(localStorage.getItem("island-position") || 20));
+      setAiModel(localStorage.getItem("ai-model") || "openai/gpt-3.5-turbo");
+      setCustomModel(localStorage.getItem("custom-model") || "");
+      setScrollAction(localStorage.getItem("scroll-action") || "volume");
+      setClockStyle(localStorage.getItem("clock-style") || "digital");
+      setAnalogStyle(localStorage.getItem("analog-style") || "simple");
+      setClockFont(localStorage.getItem("clock-font") || "OpenRunde");
+      setShowWatchInIdle(localStorage.getItem("show-watch-idle") !== "false");
+      setShowTimerBorder(localStorage.getItem("show-timer-border") !== "false");
+      setTimerBorderColor(localStorage.getItem("timer-border-color") || "#FAFAFA");
+      setNotchModeEnabled(localStorage.getItem("notch-mode") === "true");
+      setShowArrows(localStorage.getItem("show-nav-arrows") === "true");
+      setInfiniteScroll(localStorage.getItem("infinite-scroll") === "true");
+      setPinnedUrls(JSON.parse(localStorage.getItem("pinned-urls") || '["https://youtube.com", "https://whatsapp.com", "https://notion.so", "https://drive.google.com"]'));
+      setEnabledHomeWidgets(getEnabledHomeWidgets());
+      setGoogleClientId(localStorage.getItem("google-calendar-client-id") || "");
+      setGoogleClientSecret(localStorage.getItem("google-calendar-client-secret") || "");
+      setHomePageMode(localStorage.getItem("home-page-mode") || "widgets");
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   // Set theme
@@ -1651,6 +1837,38 @@ export default function Island() {
     } else if (theme === "none") {
     }
   }, [theme, opacity]);
+
+  function getDomainName(url) {
+    if (!url) return '';
+    try {
+      const parsed = new URL(url);
+      let hostname = parsed.hostname.toLowerCase().replace('www.', '');
+      let parts = hostname.split('.');
+
+      if (parts.length === 1) return parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+
+      // Common TLDs and service subdomains
+      const tlds = ['com', 'org', 'net', 'edu', 'gov', 'mil', 'co', 'io', 'ai', 'me', 'dev', 'app', 'uk', 'ca', 'de', 'jp', 'fr', 'au', 'us', 'ru', 'ch', 'it', 'nl', 'se', 'no', 'es', 'mil'];
+      const serviceSubdomains = ['web', 'mail', 'app', 'docs', 'drive', 'm', 'mobile', 'chat', 'status', 'dev', 'api'];
+
+      let brandIndex = parts.length - 2;
+
+      // Handle multi-part TLDs like .co.uk or .com.au
+      if (parts.length >= 3 && tlds.includes(parts[parts.length - 2]) && parts[parts.length - 1].length <= 3) {
+        brandIndex = parts.length - 3;
+      }
+
+      // If we are pointing at a service subdomain (like 'web' in web.whatsapp.com), move to the next part
+      if (brandIndex === 0 && parts.length > 2 && serviceSubdomains.includes(parts[0])) {
+        brandIndex = 1;
+      }
+
+      let brand = parts[brandIndex] || parts[0];
+      return brand.charAt(0).toUpperCase() + brand.slice(1);
+    } catch {
+      return url;
+    }
+  }
 
   // Browser Search Feature
   function resolveSearchInput(val) {
@@ -1753,19 +1971,16 @@ export default function Island() {
     if (!autoRevertTime || autoRevertTime < 1000) return;
 
     const checkActivity = setInterval(() => {
-      if (Date.now() - lastInteractionRef.current > autoRevertTime) {
+      if (Date.now() - lastInteractionRef.current > autoRevertTime && !embeddedWebUrl) {
+        setIsReverting(true);
         setMode("still");
         setView("home");
+        setTimeout(() => setIsReverting(false), 500);
       }
     }, 1000);
 
     return () => clearInterval(checkActivity);
-  }, [mode, autoRevertTime]);
-
-  // Track interaction
-  const interact = useRef(() => {
-    lastInteractionRef.current = Date.now();
-  }).current;
+  }, [mode, autoRevertTime, embeddedWebUrl]);
 
   useEffect(() => {
     const handleMove = () => {
@@ -1832,17 +2047,21 @@ export default function Island() {
         } else if (view === 'weather_details') {
           if (e.key === 'ArrowUp') setView('weather');
         } else if (view === 'todo_calendar') {
-          if (e.key === 'ArrowDown') setView('todo');
+          if (e.key === 'ArrowUp' && layoutOrder.todo[1] === 'calendar') setView('todo');
+          if (e.key === 'ArrowDown' && layoutOrder.todo[0] === 'calendar') setView('todo');
           if (e.key === 'Escape') setView('todo');
         } else if (view === 'todo_calendar_events') {
           if (e.key === 'ArrowDown') setView('todo_calendar');
           if (e.key === 'Escape') setView('todo_calendar');
         } else if (view === 'todo_timer') {
-          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('todo');
+          if (e.key === 'ArrowUp' && layoutOrder.todo[1] === 'timer') setView('todo');
+          if (e.key === 'ArrowDown' && layoutOrder.todo[0] === 'timer') setView('todo');
         } else if (view === 'dropbox') {
-          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('home');
+          if (e.key === 'ArrowUp' && layoutOrder.home[1] === 'dropbox') setView('home');
+          if (e.key === 'ArrowDown' && layoutOrder.home[0] === 'dropbox') setView('home');
         } else if (view === 'clipboard') {
-          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') setView('home');
+          if (e.key === 'ArrowUp' && layoutOrder.home[1] === 'clipboard') setView('home');
+          if (e.key === 'ArrowDown' && layoutOrder.home[0] === 'clipboard') setView('home');
         }
       }
 
@@ -1873,9 +2092,100 @@ export default function Island() {
     return 'translateX(100%)';
   };
 
+  const handlePageDragStart = (e) => {
+    if (mode !== 'large') return;
+    
+    // Don't drag if clicking on interactive elements
+    const target = e.target;
+    const isInteractive = ['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT'].includes(target.tagName) || 
+                         target.closest('button') || 
+                         target.closest('.nav-dest-zone') ||
+                         target.closest('.todo-item') || // prevent drag on todo items
+                         target.closest('.clipboard-item') ||
+                         target.closest('.search-result-item') ||
+                         target.closest('webview');
+    
+    if (isInteractive) return;
+
+    // Prevent text selection while dragging
+    e.preventDefault();
+
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+    setIsDraggingPage(true);
+  };
+
+  const handlePageDragMove = (e) => {
+    if (!isDraggingPage || !dragStartPos.current) return;
+    
+    // We can add visual feedback here if we want the page to move with the mouse
+    // For now, we'll just handle the completion in onMouseUp
+  };
+
+  const handlePageDragEnd = (e) => {
+    if (!isDraggingPage || !dragStartPos.current) {
+      setIsDraggingPage(false);
+      dragStartPos.current = null;
+      return;
+    }
+
+    const diffX = e.clientX - dragStartPos.current.x;
+    const diffY = e.clientY - dragStartPos.current.y;
+    const threshold = 60;
+
+    setPrevView(view);
+
+    const getNextPage = (direction) => {
+      const len = layoutOrder.pages.length;
+      const currentIdx = layoutOrder.pages.indexOf(view);
+      if (currentIdx === -1) return view;
+      let nextIdx = currentIdx + direction;
+      if (infiniteScroll) {
+        nextIdx = (nextIdx + len) % len;
+      } else {
+        nextIdx = Math.max(0, Math.min(len - 1, nextIdx));
+      }
+      return layoutOrder.pages[nextIdx];
+    };
+
+    // Horizontal Swipes (Pages)
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > threshold) {
+      if (diffX > 0) setView(getNextPage(-1)); // Swipe Right -> Go Left
+      else setView(getNextPage(1)); // Swipe Left -> Go Right
+    } 
+    // Vertical Swipes (Sub-views)
+    else if (Math.abs(diffY) > threshold) {
+      if (diffY > 0) { // Swipe Down -> Go Up
+        if (view === 'home') setView(layoutOrder.home[0]);
+        else if (view === 'todo') setView(layoutOrder.todo[0] === 'calendar' ? 'todo_calendar' : 'todo_timer');
+        else if (view === 'weather') setView(layoutOrder.weather[0] === 'details' ? 'weather_details' : 'weather');
+        else if (view === 'search') setView(layoutOrder.search[0] === 'urls' ? 'search_urls' : 'search');
+        else if (view === 'weather_details') setView('weather');
+        else if (view === 'todo_timer' || view === 'todo_calendar') setView('todo');
+        else if (view === 'search_urls') setView('search');
+        else if (view === 'dropbox') setView('home');
+        else if (view === 'todo_calendar_events') setView('todo_calendar');
+      } else { // Swipe Up -> Go Down
+        if (view === 'home') setView(layoutOrder.home[1]);
+        else if (view === 'weather') setView(layoutOrder.weather[1] === 'details' ? 'weather_details' : 'weather');
+        else if (view === 'todo') setView(layoutOrder.todo[1] === 'calendar' ? 'todo_calendar' : 'todo_timer');
+        else if (view === 'search') setView(layoutOrder.search[1] === 'urls' ? 'search_urls' : 'search');
+        else if (view === 'weather_details') setView('weather');
+        else if (view === 'todo_timer' || view === 'todo_calendar') setView('todo');
+        else if (view === 'search_urls') setView('search');
+        else if (view === 'clipboard') setView('home');
+      }
+    }
+
+    setIsDraggingPage(false);
+    dragStartPos.current = null;
+  };
+
   return (
     <div
       id="Island"
+      onMouseDown={handlePageDragStart}
+      onMouseMove={handlePageDragMove}
+      onMouseUp={handlePageDragEnd}
       onDragEnter={() => {
         if (showInIslandSettings) return;
         if (mode !== "large") setMode("large");
@@ -1904,12 +2214,31 @@ export default function Island() {
         // Auto-collapse logic maintained
         if (view === 'dropbox' || isDraggingOutRef.current) return;
 
-        if (standbyBorderEnabled) {
-          setMode("quick");
-        } else if (largeStandbyEnabled) {
-          setMode("large");
+        // If we are in large mode, we want to close "on the current page" 
+        // and reset to home silently while closed.
+        if (mode === 'large' && view !== 'home' && !embeddedWebUrl) {
+          setIsReverting(true);
+          if (standbyBorderEnabled) {
+            setMode("quick");
+          } else {
+            setMode("still");
+          }
+          // Reset state after a short delay (once collapsed)
+          setTimeout(() => {
+            setView('home');
+            setBrowserSearch('');
+            setSearchQuery('');
+            setSearchResults([]);
+            setIsReverting(false);
+          }, 400);
         } else {
-          setMode("still");
+          if (standbyBorderEnabled) {
+            setMode("quick");
+          } else if (largeStandbyEnabled) {
+            setMode("large");
+          } else {
+            setMode("still");
+          }
         }
       }}
       onClick={(e) => {
@@ -1946,21 +2275,28 @@ export default function Island() {
             ? "#FFFFFF #808080 #808080 #FFFFFF"
             : "none",
         borderRadius: notchModeEnabled
+<<<<<<< Updated upstream
           ? (mode === 'large' ? '12px 12px 24px 24px' : mode === 'quick' ? '10px 10px 20px 20px' : '8px 8px 16px 16px')
+=======
+          ? (mode === 'large' ? '0 0 20px 20px' : mode === 'quick' ? '0 0 18px 18px' : '0 0 14px 14px')
+>>>>>>> Stashed changes
           : (mode === "large" && theme === "win95"
             ? 0
-            : (mode === "large" || mode === "quick")
+            : mode === "large"
               ? cornerRadius
-              : theme === "win95"
-                ? 0
-                : 16),
+              : mode === "quick"
+                ? 12 // Less rounded in bar mode when hovering
+                : theme === "win95"
+                  ? 0
+                  : 16),
         boxShadow: hideNotActiveIslandEnabled && mode === 'still' ? "none" : '2px 2px 30px rgba(0, 0, 0, 0.07)',
         backgroundColor: (view === 'weather' || view === 'weather_details')
           ? (getWeatherStyles().bgColor.includes('gradient') ? 'transparent' : getWeatherStyles().bgColor)
           : (hideNotActiveIslandEnabled && mode === 'still' ? "rgba(0,0,0,0)" : localStorage.getItem("bg-color")),
         color: hideNotActiveIslandEnabled && mode === 'still' ? "rgba(0,0,0,0)" : localStorage.getItem("text-color"),
         transition: "all 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
-        zIndex: 9999
+        zIndex: 9999,
+        userSelect: isDraggingPage ? 'none' : 'auto'
       }}
     >
       {/* Notification View */}
@@ -2180,7 +2516,7 @@ export default function Island() {
                 {mode === 'large' ? (ringingEvent.time || '--:--') : time}
               </div>
 
-              {/* Center: Event Text */}
+              {/* Right: Event Text */}
               <div style={{
                 fontSize: mode === 'large' ? 11 : 13,
                 fontWeight: 600,
@@ -2190,15 +2526,10 @@ export default function Island() {
                 whiteSpace: 'nowrap',
                 flex: 1,
                 color: textColor,
-                textAlign: 'center'
+                textAlign: 'right'
               }}>
                 {ringingEvent.text}
               </div>
-
-              {/* Right: Spacer to maintain centering */}
-              {mode !== 'large' && (
-                <div style={{ width: 40 }} />
-              )}
             </div>
           </div>
         </div>
@@ -2529,7 +2860,13 @@ export default function Island() {
       )}
 
       {/* Main Content Area with Transitions */}
-      <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      <div style={{ 
+        position: 'relative', 
+        width: '100%', 
+        height: '100%', 
+        overflow: 'hidden',
+        transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+      }}>
 
         {/* Home View */}
         <div style={{
@@ -2538,7 +2875,7 @@ export default function Island() {
           transform: view === layoutOrder.home[0] ? 'translateY(100%)' :
             view === layoutOrder.home[1] ? 'translateY(-100%)' :
               getHorizontalTransform('home'),
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           pointerEvents: view === 'home' && mode === 'large' ? 'auto' : 'none',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
         }}>
@@ -2620,6 +2957,37 @@ export default function Island() {
                 gap: 20,
                 paddingRight: 5
               }}>
+                {/* Home Page Mode Section */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Home Page Layout</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>Mode</span>
+                    <div style={{ display: 'flex', gap: 5, background: 'rgba(255,255,255,0.05)', padding: 3, borderRadius: 8 }}>
+                      {['normal', 'widgets'].map(m => (
+                        <div
+                          key={m}
+                          onClick={() => {
+                            setHomePageMode(m);
+                            localStorage.setItem("home-page-mode", m);
+                          }}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            background: homePageMode === m ? 'rgba(255,255,255,0.1)' : 'transparent',
+                            color: homePageMode === m ? '#fff' : 'rgba(255,255,255,0.4)',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          {m.toUpperCase()}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Clock Customization Section */}
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Clock Customization</div>
@@ -3321,6 +3689,7 @@ export default function Island() {
                 </div>
 
                 {/* Home Widget Settings Section */}
+<<<<<<< Updated upstream
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Home Widgets</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -3353,6 +3722,42 @@ export default function Island() {
                     Selected: {enabledHomeWidgets.length}/4
                   </div>
                 </div>
+=======
+                {homePageMode === 'widgets' && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Home Widgets</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      {AVAILABLE_HOME_WIDGETS.map((widgetKey) => {
+                        const isActive = enabledHomeWidgets.includes(widgetKey);
+                        const label = widgetKey === 'clock_media'
+                          ? 'Clock / Media'
+                          : widgetKey.charAt(0).toUpperCase() + widgetKey.slice(1);
+                        return (
+                          <button
+                            key={widgetKey}
+                            onClick={() => toggleHomeWidget(widgetKey)}
+                            style={{
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              borderRadius: 10,
+                              background: isActive ? 'rgba(79,172,254,0.25)' : 'rgba(255,255,255,0.04)',
+                              color: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
+                              padding: '8px 10px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: 11, opacity: 0.55 }}>
+                      Selected: {enabledHomeWidgets.length}/4
+                    </div>
+                  </div>
+                )}
+>>>>>>> Stashed changes
 
                 {/* Calendar Settings Section */}
                 <div>
@@ -3874,6 +4279,7 @@ export default function Island() {
             </div>
           )}
 
+<<<<<<< Updated upstream
           {/* Home Widgets */}
           <div style={{
             width: '100%',
@@ -3885,6 +4291,90 @@ export default function Island() {
             gap: 10
           }}>
             {safeHomeWidgets.map((widgetKey, widgetIndex) => {
+=======
+          {/* Home View Content */}
+          {homePageMode === 'normal' ? (
+            <div style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              position: 'relative',
+              padding: '20px'
+            }}>
+              {/* Battery Status (Top Left) */}
+              <div style={{
+                position: 'absolute',
+                top: 20,
+                left: 20,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                opacity: 0.8
+              }}>
+                {getBatteryIcon()}
+                <span style={{ fontSize: 12, fontWeight: 700 }}>{percent}%</span>
+              </div>
+
+              {/* Weather Status (Top Right) */}
+              <div style={{
+                position: 'absolute',
+                top: 20,
+                right: 20,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                opacity: 0.8,
+                cursor: 'pointer'
+              }} onClick={() => setView('weather')}>
+                <Cloud size={14} color={textColor} />
+                <span style={{ fontSize: 12, fontWeight: 700 }}>{weather ? `${weather}°` : "--°"}</span>
+              </div>
+
+              {/* Central Clock */}
+              <div 
+                style={{ 
+                  cursor: 'pointer',
+                  transform: shouldAnimateClock ? 'scale(1.05)' : 'scale(1)',
+                  transition: 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}
+                onClick={() => setView('music')}
+              >
+                {clockStyle === 'analog' ? (
+                  <AnalogClock size={100} color={textColor} style={analogStyle} />
+                ) : (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ 
+                      fontSize: 56, 
+                      fontWeight: 800, 
+                      lineHeight: 1,
+                      fontFamily: clockFont === 'w95' ? '"MS Sans Serif", "Microsoft Sans Serif", sans-serif' :
+                                  clockFont === 'OpenRunde' ? '"OpenRunde", sans-serif' :
+                                  clockFont
+                    }}>
+                      {time}
+                    </div>
+                    <div style={{ fontSize: 13, opacity: 0.5, fontWeight: 700, marginTop: 6 }}>
+                      {formatDateShort()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              width: '100%',
+              height: '100%',
+              padding: '16px 16px 14px 16px',
+              boxSizing: 'border-box',
+              display: 'grid',
+              gridTemplate: widgetGridTemplate,
+              gap: 10
+            }}>
+              {safeHomeWidgets.map((widgetKey, widgetIndex) => {
+>>>>>>> Stashed changes
               const todayEvents = Array.isArray(calendarEvents?.[getTodayIso()]) ? calendarEvents[getTodayIso()] : [];
               const nextTodo = todos.find((todo) => !todo.completed);
               const weatherStyle = getWeatherStyles();
@@ -3893,17 +4383,29 @@ export default function Island() {
                 ? { gridColumn: '1 / -1', justifySelf: 'center', width: 'calc(50% - 5px)' }
                 : undefined;
               const tileStyle = {
+<<<<<<< Updated upstream
                 borderRadius: 24,
                 border: '1px solid rgba(255,255,255,0.07)',
                 background: 'linear-gradient(180deg, rgba(24,24,28,0.95), rgba(14,14,17,0.92))',
                 backdropFilter: 'blur(18px)',
                 padding: 14,
+=======
+                borderRadius: 20,
+                border: '1px solid rgba(255,255,255,0.07)',
+                background: 'linear-gradient(180deg, rgba(24,24,28,0.95), rgba(14,14,17,0.92))',
+                backdropFilter: 'blur(18px)',
+                padding: 12,
+>>>>>>> Stashed changes
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
                 minHeight: 0,
+<<<<<<< Updated upstream
                 boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
+=======
+                boxShadow: '0 8px 20px rgba(0,0,0,0.3)',
+>>>>>>> Stashed changes
                 position: 'relative',
                 overflow: 'hidden',
                 ...widgetPositionStyle
@@ -3913,6 +4415,7 @@ export default function Island() {
                 return (
                   <div key={widgetKey} style={tileStyle} onClick={() => setView('music')}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+<<<<<<< Updated upstream
                       <span style={{ fontSize: 10, opacity: 0.7, fontWeight: 700, letterSpacing: 0.3 }}>CLOCK / MEDIA</span>
                       <Music size={14} opacity={0.55} />
                     </div>
@@ -3921,11 +4424,21 @@ export default function Island() {
                         <div style={{ fontSize: 30, fontWeight: 700, lineHeight: 1, textAlign: 'center', marginTop: 4 }}>{time}</div>
                         <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{spotifyTrack?.name || 'Now Playing'}</div>
                         <div style={{ fontSize: 11, opacity: 0.65, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{spotifyTrack?.artist || 'System Media'}</div>
+=======
+                      <span style={{ fontSize: 9, opacity: 0.7, fontWeight: 700, letterSpacing: 0.3 }}>CLOCK / MEDIA</span>
+                      <Music size={12} opacity={0.55} />
+                    </div>
+                    {isPlaying || spotifyTrack?.name ? (
+                      <>
+                        <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1, textAlign: 'center', marginTop: 2 }}>{time}</div>
+                        <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{spotifyTrack?.name || 'Now Playing'}</div>
+                        <div style={{ fontSize: 10, opacity: 0.65, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{spotifyTrack?.artist || 'System Media'}</div>
+>>>>>>> Stashed changes
                       </>
                     ) : (
-                      <div style={{ textAlign: 'center', marginTop: 8 }}>
-                        <div style={{ fontSize: 34, fontWeight: 700, lineHeight: 1 }}>{time}</div>
-                        <div style={{ fontSize: 11, opacity: 0.65, marginTop: 4 }}>{formatDateShort()}</div>
+                      <div style={{ textAlign: 'center', marginTop: 6 }}>
+                        <div style={{ fontSize: 30, fontWeight: 700, lineHeight: 1 }}>{time}</div>
+                        <div style={{ fontSize: 10, opacity: 0.65, marginTop: 2 }}>{formatDateShort()}</div>
                       </div>
                     )}
                   </div>
@@ -3936,25 +4449,25 @@ export default function Island() {
                 return (
                   <div key={widgetKey} style={tileStyle} onClick={() => setView('todo')}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 700 }}>TODO</span>
-                      <List size={14} opacity={0.7} />
+                      <span style={{ fontSize: 9, opacity: 0.6, fontWeight: 700 }}>TODO</span>
+                      <List size={12} opacity={0.7} />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-                      {todos.slice(0, 3).map((todo) => (
-                        <div key={todo.id} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                      {todos.slice(0, 2).map((todo) => (
+                        <div key={todo.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleTodo(todo.id);
                             }}
-                            style={{ width: 14, height: 14, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.45)', background: todo.completed ? '#fff' : 'transparent', cursor: 'pointer' }}
+                            style={{ width: 12, height: 12, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.45)', background: todo.completed ? '#fff' : 'transparent', cursor: 'pointer' }}
                           />
-                          <span style={{ fontSize: 11, opacity: todo.completed ? 0.45 : 0.85, textDecoration: todo.completed ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{todo.text}</span>
+                          <span style={{ fontSize: 10, opacity: todo.completed ? 0.45 : 0.85, textDecoration: todo.completed ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{todo.text}</span>
                         </div>
                       ))}
-                      {todos.length === 0 && <span style={{ fontSize: 11, opacity: 0.5 }}>No todos yet</span>}
+                      {todos.length === 0 && <span style={{ fontSize: 10, opacity: 0.5 }}>No todos yet</span>}
                     </div>
-                    <div style={{ fontSize: 10, opacity: 0.55 }}>Next: {nextTodo?.text || 'All clear'}</div>
+                    <div style={{ fontSize: 9, opacity: 0.55 }}>Next: {nextTodo?.text || 'All clear'}</div>
                   </div>
                 );
               }
@@ -3963,17 +4476,26 @@ export default function Island() {
                 return (
                   <div key={widgetKey} style={tileStyle} onClick={() => setView('todo_timer')}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 700 }}>TIMER</span>
-                      <TimerIcon size={14} opacity={0.7} />
+                      <span style={{ fontSize: 9, opacity: 0.6, fontWeight: 700 }}>TIMER</span>
+                      <TimerIcon size={12} opacity={0.7} />
                     </div>
+<<<<<<< Updated upstream
                     <div style={{ fontSize: 30, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{formatTimer(timerSeconds)}</div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+=======
+                    <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{formatTimer(timerSeconds)}</div>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+>>>>>>> Stashed changes
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setTimerSeconds((prev) => Math.max(0, prev - 60));
                         }}
+<<<<<<< Updated upstream
                         style={{ border: 'none', borderRadius: 8, background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}
+=======
+                        style={{ border: 'none', borderRadius: 6, background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: 10, padding: '3px 6px', cursor: 'pointer' }}
+>>>>>>> Stashed changes
                       >
                         -1m
                       </button>
@@ -3982,7 +4504,11 @@ export default function Island() {
                           e.stopPropagation();
                           setTimerSeconds((prev) => Math.min(359940, prev + 60));
                         }}
+<<<<<<< Updated upstream
                         style={{ border: 'none', borderRadius: 8, background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}
+=======
+                        style={{ border: 'none', borderRadius: 6, background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: 10, padding: '3px 6px', cursor: 'pointer' }}
+>>>>>>> Stashed changes
                       >
                         +1m
                       </button>
@@ -3992,9 +4518,10 @@ export default function Island() {
                           if (!isTimerRunning && timerSeconds > 0) setTimerTotalSeconds(timerSeconds);
                           setIsTimerRunning(!isTimerRunning);
                         }}
-                        style={{ border: 'none', borderRadius: 8, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}
+                        style={{ border: 'none', borderRadius: 6, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 10, padding: '3px 6px', cursor: 'pointer' }}
                       >
                         {isTimerRunning ? 'Stop' : 'Start'}
+<<<<<<< Updated upstream
                       </button>
                       <button
                         onClick={(e) => {
@@ -4005,6 +4532,8 @@ export default function Island() {
                         style={{ border: 'none', borderRadius: 8, background: 'rgba(239,68,68,0.22)', color: '#fff', fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}
                       >
                         Reset
+=======
+>>>>>>> Stashed changes
                       </button>
                     </div>
                   </div>
@@ -4015,12 +4544,12 @@ export default function Island() {
                 return (
                   <div key={widgetKey} style={tileStyle} onClick={() => setView('todo_calendar')}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 700 }}>CALENDAR</span>
-                      <Calendar size={14} opacity={0.7} />
+                      <span style={{ fontSize: 9, opacity: 0.6, fontWeight: 700 }}>CALENDAR</span>
+                      <Calendar size={12} opacity={0.7} />
                     </div>
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>{formatDateShort()}</div>
-                    <div style={{ fontSize: 11, opacity: 0.8 }}>{todayEvents.length} event{todayEvents.length === 1 ? '' : 's'} today</div>
-                    <div style={{ fontSize: 10, opacity: 0.55, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{todayEvents[0]?.text || 'No events scheduled'}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{formatDateShort()}</div>
+                    <div style={{ fontSize: 10, opacity: 0.8 }}>{todayEvents.length} events</div>
+                    <div style={{ fontSize: 9, opacity: 0.55, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{todayEvents[0]?.text || 'No events'}</div>
                   </div>
                 );
               }
@@ -4028,16 +4557,17 @@ export default function Island() {
               return (
                 <div key={widgetKey} style={{ ...tileStyle, background: weatherStyle.bgColor.includes('gradient') ? weatherStyle.bgColor : `linear-gradient(165deg, rgba(26,26,30,0.95), ${weatherStyle.bgColor})` }} onClick={() => setView('weather')}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, opacity: 0.8, fontWeight: 700 }}>WEATHER</span>
-                    <Cloud size={14} opacity={0.9} />
+                    <span style={{ fontSize: 9, opacity: 0.8, fontWeight: 700 }}>WEATHER</span>
+                    <Cloud size={12} opacity={0.9} />
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1 }}>{weather ? `${weather}°` : '--°'}</div>
-                  <div style={{ fontSize: 12, opacity: 0.9 }}>{weatherCondition}</div>
-                  <div style={{ fontSize: 10, opacity: 0.75 }}>Tap for details</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1 }}>{weather ? `${weather}°` : '--°'}</div>
+                  <div style={{ fontSize: 11, opacity: 0.9 }}>{weatherCondition}</div>
+                  <div style={{ fontSize: 9, opacity: 0.75 }}>Tap for details</div>
                 </div>
               );
             })}
           </div>
+          )}
         </div>
         {/* Music View Redesign */}
         <div style={{
@@ -4094,8 +4624,8 @@ export default function Island() {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'weather' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'weather' && mode === 'large') ? 'auto' : 'none',
-          transform: view === 'weather_details' ? (layoutOrder.weather[0] === 'details' ? 'translateY(-100%)' : 'translateY(100%)') : getHorizontalTransform('weather'),
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transform: view === 'weather_details' ? (layoutOrder.weather[0] === 'details' ? 'translateY(100%)' : 'translateY(-100%)') : getHorizontalTransform('weather'),
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '20px'
         }}>
@@ -4112,8 +4642,8 @@ export default function Island() {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'weather_details' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'weather_details' && mode === 'large') ? 'auto' : 'none',
-          transform: view === 'weather_details' ? 'translate(0,0)' : 'translateY(100%)',
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transform: view === 'weather_details' ? 'translate(0,0)' : (layoutOrder.weather[0] === 'details' ? 'translateY(-100%)' : 'translateY(100%)'),
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '20px'
         }}>
@@ -4165,19 +4695,22 @@ export default function Island() {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'search' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'search' && mode === 'large') ? 'auto' : 'none',
-          transform: view === 'search_urls' ? (layoutOrder.search[0] === 'urls' ? 'translateY(-100%)' : 'translateY(100%)') : getHorizontalTransform('search'),
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transform: view === 'search_urls' ? (layoutOrder.search[0] === 'urls' ? 'translateY(100%)' : 'translateY(-100%)') : getHorizontalTransform('search'),
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '20px'
         }}>
           <h2 style={{ fontSize: 18, marginBottom: 15, fontWeight: 700 }}>Search / URL</h2>
           <input
+            ref={mainSearchInputRef}
             autoFocus={view === 'search' && mode === 'large'}
             type="text"
             placeholder="Search Google or type URL..."
-            value={searchQuery}
+            value={embeddedWebUrl && !isMainInputFocused ? getDomainName(searchQuery) : searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: '90%', padding: '12px 20px', borderRadius: 25, border: 'none', outline: 'none', background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: 16 }}
+            onFocus={() => setIsMainInputFocused(true)}
+            onBlur={() => setIsMainInputFocused(false)}
+            style={{ width: '90%', padding: '12px 20px', borderRadius: 25, border: 'none', outline: 'none', background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: 16, textAlign: embeddedWebUrl && !isMainInputFocused ? 'center' : 'left' }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 const val = searchQuery;
@@ -4204,26 +4737,117 @@ export default function Island() {
 
           {embeddedWebUrl && (
             <div style={{
-              width: '95%',
-              marginTop: 12,
+              width: '96%',
+              marginTop: 10,
               display: 'flex',
               flexDirection: 'column',
-              gap: 8,
-              height: 360
+              height: 400,
+              background: 'rgba(255,255,255,0.03)',
+              borderRadius: 20,
+              border: '1px solid rgba(255,255,255,0.08)',
+              overflow: 'hidden',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
+              animation: 'appear 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
             }}>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
-                <button
+              {/* Webview Toolbar */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 15px',
+                background: 'rgba(255,255,255,0.05)',
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <div style={{ display: 'flex', gap: 15, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <div 
+                      onClick={() => webviewRef.current?.canGoBack() && webviewRef.current?.goBack()}
+                      style={{ cursor: 'pointer', opacity: 0.6, padding: 4, borderRadius: 6, transition: 'all 0.2s' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <ChevronLeft size={16} color={textColor} />
+                    </div>
+                    <div 
+                      onClick={() => webviewRef.current?.canGoForward() && webviewRef.current?.goForward()}
+                      style={{ cursor: 'pointer', opacity: 0.6, padding: 4, borderRadius: 6, transition: 'all 0.2s' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <ChevronRight size={16} color={textColor} />
+                    </div>
+                  </div>
+                  
+                  <div 
+                    onClick={() => webviewRef.current?.reload()}
+                    style={{ cursor: 'pointer', opacity: 0.6, padding: 4, borderRadius: 6, transition: 'all 0.2s' }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <RotateCcw size={14} color={textColor} />
+                  </div>
+                </div>
+
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const { url, isDirectUrl } = resolveSearchInput(searchQuery);
+                      setEmbeddedWebUrl(url);
+                      setWebviewReloadKey(prev => prev + 1);
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    margin: '0 20px',
+                    background: 'rgba(0,0,0,0.2)',
+                    padding: '6px 12px',
+                    borderRadius: 10,
+                    fontSize: 11,
+                    color: textColor,
+                    opacity: 0.8,
+                    textAlign: 'center',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    outline: 'none'
+                  }}
+                />
+
+                <div 
                   onClick={() => setEmbeddedWebUrl('')}
-                  style={{ border: 'none', borderRadius: 10, padding: '4px 9px', background: 'rgba(239,68,68,0.25)', color: '#fff', fontSize: 10, cursor: 'pointer' }}
+                  style={{ 
+                    cursor: 'pointer', 
+                    background: 'rgba(239, 68, 68, 0.15)', 
+                    color: '#ef4444',
+                    padding: '6px',
+                    borderRadius: 10,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
+                    e.currentTarget.style.transform = 'scale(1.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
                 >
-                  Close
-                </button>
+                  <X size={16} strokeWidth={2.5} />
+                </div>
               </div>
+
               <webview
+                ref={webviewRef}
                 key={webviewReloadKey}
                 src={embeddedWebUrl}
                 allowpopups="true"
-                style={{ width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.12)' }}
+                style={{ width: '100%', flex: 1, background: '#fff' }}
               />
             </div>
           )}
@@ -4309,8 +4933,8 @@ export default function Island() {
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           opacity: (view === 'search_urls' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'search_urls' && mode === 'large') ? 'auto' : 'none',
-          transform: view === 'search_urls' ? 'translate(0,0)' : 'translateY(100%)',
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transform: view === 'search_urls' ? 'translate(0,0)' : (layoutOrder.search[0] === 'urls' ? 'translateY(-100%)' : 'translateY(100%)'),
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '20px'
         }}>
@@ -4495,7 +5119,7 @@ export default function Island() {
           opacity: (view === 'ai' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'ai' && mode === 'large') ? 'auto' : 'none',
           transform: getHorizontalTransform('ai'),
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 20px 20px 20px'
         }}>
           {/* Header */}
@@ -4602,7 +5226,11 @@ export default function Island() {
           )}
 
           {/* Messages Area */}
-          <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', paddingRight: 5, marginBottom: 10 }}>
+          <div 
+            ref={aiMessagesRef}
+            onScroll={handleAIScroll}
+            style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', paddingRight: 5, marginBottom: 10, scrollBehavior: 'smooth' }}
+          >
             {messages.length === 0 ? (
               <div style={{ textAlign: 'center', opacity: 0.3, fontSize: 12, marginTop: 'auto', marginBottom: 'auto' }}>How can I help you today?</div>
             ) : (
@@ -4624,7 +5252,35 @@ export default function Island() {
           </div>
 
           {/* Input Area */}
-          <div style={{ width: '100%', display: 'flex', gap: 10 }}>
+          <div style={{ width: '100%', display: 'flex', gap: 10, position: 'relative' }}>
+            {showScrollDownButton && (
+              <div 
+                onClick={scrollToBottomAI}
+                style={{
+                  position: 'absolute',
+                  top: -35,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: 'rgba(255,255,255,0.1)',
+                  backdropFilter: 'blur(10px)',
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                  animation: 'appear 0.2s ease-out',
+                  zIndex: 10
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+              >
+                <ChevronDown size={14} color={textColor} />
+              </div>
+            )}
             <input
               autoFocus={view === 'ai' && mode === 'large'}
               type="text"
@@ -4650,19 +5306,138 @@ export default function Island() {
             : (view === (layoutOrder.todo[0] === 'calendar' ? 'todo_calendar' : 'todo_timer') || view === 'todo_calendar_events')
               ? 'translateY(100%)'
               : getHorizontalTransform('todo'),
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
         }}>
           {/* Header */}
-          <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10 }}>
+          <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>TO-DO LIST</div>
+            <div 
+              onClick={() => setIsEditingTodoCategories(!isEditingTodoCategories)}
+              style={{ cursor: 'pointer', opacity: isEditingTodoCategories ? 1 : 0.3, transition: 'opacity 0.2s' }}
+            >
+              <Edit2 size={12} color={textColor} />
+            </div>
+          </div>
+
+          {/* Categories Bar */}
+          <div style={{ 
+            display: 'flex', 
+            gap: 8, 
+            marginBottom: 15, 
+            overflowX: 'auto', 
+            paddingBottom: 5,
+            msOverflowStyle: 'none',
+            scrollbarWidth: 'none',
+            width: '100%'
+          }}>
+            <style>{`
+              div::-webkit-scrollbar { display: none; }
+            `}</style>
+            {todoCategories.map(cat => (
+              <div 
+                key={cat}
+                onClick={() => !isEditingTodoCategories && setActiveTodoCategory(cat)}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: 999,
+                  background: activeTodoCategory === cat ? (isEditingTodoCategories && cat !== 'All' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.15)') : 'rgba(255,255,255,0.05)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  border: activeTodoCategory === cat ? '1px solid rgba(255,255,255,0.1)' : '1px solid transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.2s'
+                }}
+              >
+                {cat.toUpperCase()}
+                {isEditingTodoCategories && cat !== 'All' && (
+                  <div 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeTodoCategory(cat);
+                    }}
+                    style={{ opacity: 0.6 }}
+                  >
+                    <X size={10} />
+                  </div>
+                )}
+              </div>
+            ))}
+            {isEditingTodoCategories && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {isAddingTodoCategory ? (
+                  <div style={{ display: 'flex', gap: 5, alignItems: 'center', background: 'rgba(255,255,255,0.08)', padding: '2px 8px', borderRadius: 999 }}>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          addTodoCategory(newCategoryName);
+                          setNewCategoryName("");
+                          setIsAddingTodoCategory(false);
+                        }
+                        if (e.key === 'Escape') {
+                          setNewCategoryName("");
+                          setIsAddingTodoCategory(false);
+                        }
+                      }}
+                      placeholder="Category..."
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        outline: 'none',
+                        color: 'white',
+                        fontSize: 10,
+                        width: '70px',
+                        fontWeight: 700
+                      }}
+                    />
+                    <div onClick={() => {
+                      addTodoCategory(newCategoryName);
+                      setNewCategoryName("");
+                      setIsAddingTodoCategory(false);
+                    }} style={{ cursor: 'pointer', opacity: 0.7 }}>
+                      <Check size={10} />
+                    </div>
+                    <div onClick={() => {
+                      setNewCategoryName("");
+                      setIsAddingTodoCategory(false);
+                    }} style={{ cursor: 'pointer', opacity: 0.7 }}>
+                      <X size={10} />
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => setIsAddingTodoCategory(true)}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: 999,
+                      background: 'rgba(255,255,255,0.05)',
+                      fontSize: 10,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Plus size={10} />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', paddingRight: 5, marginBottom: 8 }}>
-            {todos.length === 0 ? (
-              <div style={{ textAlign: 'center', opacity: 0.3, fontSize: 13, marginTop: 'auto', marginBottom: 'auto' }}>No tasks yet</div>
+            {todos.filter(t => activeTodoCategory === "All" || t.category === activeTodoCategory).length === 0 ? (
+              <div style={{ textAlign: 'center', opacity: 0.3, fontSize: 13, marginTop: 'auto', marginBottom: 'auto' }}>No tasks in this category</div>
             ) : (
-              todos.map(todo => (
+              todos.filter(t => activeTodoCategory === "All" || t.category === activeTodoCategory).map(todo => (
                 <div key={todo.id} style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -4694,20 +5469,32 @@ export default function Island() {
                     {todo.completed && <Check size={12} color="black" />}
                   </div>
 
-                  <span style={{
-                    flex: 1,
-                    fontSize: 14,
-                    fontWeight: 500,
-                    textDecoration: todo.completed ? 'line-through' : 'none',
-                    opacity: todo.completed ? 0.4 : 0.9,
-                    color: textColor,
-                    transition: 'all 0.3s ease',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}>
-                    {todo.text}
-                  </span>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{
+                      fontSize: 14,
+                      fontWeight: 500,
+                      textDecoration: todo.completed ? 'line-through' : 'none',
+                      opacity: todo.completed ? 0.4 : 0.9,
+                      color: textColor,
+                      transition: 'all 0.3s ease',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      {todo.text}
+                    </span>
+                    {activeTodoCategory === "All" && todo.category && (
+                      <div style={{ 
+                        fontSize: 8, 
+                        fontWeight: 800, 
+                        opacity: 0.3, 
+                        letterSpacing: 0.5,
+                        textTransform: 'uppercase'
+                      }}>
+                        {todo.category}
+                      </div>
+                    )}
+                  </div>
 
                   <Trash2
                     size={14}
@@ -4743,7 +5530,7 @@ export default function Island() {
           opacity: (view === 'todo_calendar' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'todo_calendar' && mode === 'large') ? 'auto' : 'none',
           transform: view === 'todo_calendar' ? 'translate(0,0)' : (layoutOrder.todo[0] === 'calendar' ? 'translateY(-100%)' : 'translateY(100%)'),
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
         }}>
           <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10 }}>
@@ -4836,7 +5623,7 @@ export default function Island() {
           opacity: (view === 'todo_calendar_events' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'todo_calendar_events' && mode === 'large') ? 'auto' : 'none',
           transform: view === 'todo_calendar_events' ? 'translate(0,0)' : 'translateY(-100%)',
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
         }}>
           <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10, display: 'flex', alignItems: 'center', gap: 15 }}>
@@ -5023,7 +5810,7 @@ export default function Island() {
           opacity: (view === 'todo_timer' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'todo_timer' && mode === 'large') ? 'auto' : 'none',
           transform: view === 'todo_timer' ? 'translate(0,0)' : (layoutOrder.todo[0] === 'timer' ? 'translateY(-100%)' : 'translateY(100%)'),
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '40px 20px 20px 20px'
         }}>
@@ -5164,7 +5951,7 @@ export default function Island() {
           opacity: (view === 'dropbox' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'dropbox' && mode === 'large') ? 'auto' : 'none',
           transform: view === 'dropbox' ? 'translate(0,0)' : (layoutOrder.home[0] === 'dropbox' ? 'translateY(-100%)' : 'translateY(100%)'),
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '10px 10px 25px 10px', gap: 8
         }}>
           {/* Header */}
@@ -5250,7 +6037,7 @@ export default function Island() {
           opacity: (view === 'clipboard' && mode === 'large') ? 1 : 0,
           pointerEvents: (view === 'clipboard' && mode === 'large') ? 'auto' : 'none',
           transform: view === 'clipboard' ? 'translate(0,0)' : (layoutOrder.home[0] === 'clipboard' ? 'translateY(-100%)' : 'translateY(100%)'),
-          transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: isReverting ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', padding: '15px 15px 20px 15px', gap: 10
         }}>
           {/* Header */}
