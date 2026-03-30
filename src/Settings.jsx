@@ -37,7 +37,7 @@ export default function Settings() {
     const [customModel, setCustomModel] = useState(localStorage.getItem("custom-model") || "");
     const [scrollAction, setScrollAction] = useState(localStorage.getItem("scroll-action") || "volume");
     const [notchMode, setNotchMode] = useState(localStorage.getItem("notch-mode") === "true");
-    const [homePageMode, setHomePageMode] = useState(localStorage.getItem("home-page-mode") || "widgets");
+    const [homepageType, setHomepageType] = useState(localStorage.getItem("homepage-type") || "widgets");
     const [googleClientId, setGoogleClientId] = useState(localStorage.getItem("google-calendar-client-id") || "");
     const [googleClientSecret, setGoogleClientSecret] = useState(localStorage.getItem("google-calendar-client-secret") || "");
     const [googleConnected, setGoogleConnected] = useState(false);
@@ -116,7 +116,7 @@ export default function Settings() {
                     if (remoteSettings["custom-model"] !== undefined) setCustomModel(remoteSettings["custom-model"]);
                     if (remoteSettings["scroll-action"] !== undefined) setScrollAction(remoteSettings["scroll-action"]);
                     if (remoteSettings["notch-mode"] !== undefined) setNotchMode(remoteSettings["notch-mode"] === "true");
-                    if (remoteSettings["home-page-mode"] !== undefined) setHomePageMode(remoteSettings["home-page-mode"]);
+                    if (remoteSettings["homepage-type"] !== undefined) setHomepageType(remoteSettings["homepage-type"]);
                     if (remoteSettings["google-calendar-client-id"] !== undefined) setGoogleClientId(remoteSettings["google-calendar-client-id"]);
                     if (remoteSettings["google-calendar-client-secret"] !== undefined) setGoogleClientSecret(remoteSettings["google-calendar-client-secret"]);
                     if (remoteSettings["show-timer-border"] !== undefined) setShowTimerBorder(remoteSettings["show-timer-border"] !== "false");
@@ -192,7 +192,7 @@ export default function Settings() {
                 "custom-model": customModel,
                 "scroll-action": scrollAction,
                 "notch-mode": String(notchMode),
-                "home-page-mode": homePageMode,
+                "homepage-type": homepageType,
                 "google-calendar-client-id": googleClientId.trim(),
                 "google-calendar-client-secret": googleClientSecret.trim(),
                 "show-timer-border": String(showTimerBorder),
@@ -499,6 +499,26 @@ export default function Settings() {
                     </div>
                     
                     <div style={{ marginBottom: 20 }}>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>Homepage Type</label>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                            {['widgets', 'classic'].map(type => (
+                                <button
+                                    key={type}
+                                    onClick={() => { setHomepageType(type); saveSetting("homepage-type", type); }}
+                                    style={{
+                                        flex: 1, padding: '8px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                                        background: homepageType === type ? '#f472b6' : '#1f1f1f',
+                                        color: homepageType === type ? 'white' : '#777',
+                                        fontWeight: 600, transition: 'all 0.2s'
+                                    }}
+                                >
+                                    {type === 'widgets' ? 'Widgets Grid' : 'Classic View'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <div style={{ marginBottom: 20 }}>
                         <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>
                             Opacity <span>{Math.round(opacity * 100)}%</span>
                         </label>
@@ -620,44 +640,6 @@ export default function Settings() {
                             </div>
                         ))}
                         
-
-                        <div style={{ marginTop: 10 }}>
-                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>Home Page Mode</label>
-                            <div style={{ display: 'flex', gap: 10 }}>
-                                <button
-                                    onClick={() => { setHomePageMode('widgets'); saveSetting('home-page-mode', 'widgets'); }}
-                                    style={{
-                                        padding: '8px 15px',
-                                        borderRadius: 8,
-                                        border: '1px solid',
-                                        borderColor: homePageMode === 'widgets' ? '#fbbf24' : '#333',
-                                        background: homePageMode === 'widgets' ? 'rgba(251, 191, 36, 0.2)' : '#1f1f1f',
-                                        color: homePageMode === 'widgets' ? '#fbbf24' : 'white',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease',
-                                        fontSize: 14
-                                    }}
-                                >
-                                    Widgets
-                                </button>
-                                <button
-                                    onClick={() => { setHomePageMode('normal'); saveSetting('home-page-mode', 'normal'); }}
-                                    style={{
-                                        padding: '8px 15px',
-                                        borderRadius: 8,
-                                        border: '1px solid',
-                                        borderColor: homePageMode === 'normal' ? '#fbbf24' : '#333',
-                                        background: homePageMode === 'normal' ? 'rgba(251, 191, 36, 0.2)' : '#1f1f1f',
-                                        color: homePageMode === 'normal' ? '#fbbf24' : 'white',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease',
-                                        fontSize: 14
-                                    }}
-                                >
-                                    Normal (Clock)
-                                </button>
-                            </div>
-                        </div>
 
                         <div style={{ marginTop: 10 }}>
                             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>Home Widgets (1-4)</label>
