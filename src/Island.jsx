@@ -324,6 +324,8 @@ export default function Island() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [googleMessage, setGoogleMessage] = useState("");
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
+  const [hasShownUpdateBanner, setHasShownUpdateBanner] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState(null);
 
   // AI Chat Scrolling
@@ -862,6 +864,16 @@ export default function Island() {
         const savedTodos = await window.electronAPI.getTodo();
         setTodos(savedTodos);
       }
+      // Initial volume/brightness fetch
+      if (window.electronAPI) {
+        if (scrollAction === 'volume' && window.electronAPI.getVolume) {
+          const v = await window.electronAPI.getVolume();
+          if (typeof v === 'number') setScrollValue(v);
+        } else if (scrollAction === 'brightness' && window.electronAPI.getBrightness) {
+          const b = await window.electronAPI.getBrightness();
+          if (typeof b === 'number') setScrollValue(b);
+        }
+      }
     };
     loadData();
 
@@ -872,47 +884,40 @@ export default function Island() {
         window.electronAPI.setIgnoreMouseEvents(true, true);
       }
     };
+    
     const handleWheel = (e) => {
       try {
-        // Use the latest mode from state, but since we're in a [] effect, 
-        // we'll use a trick or just check the DOM if needed. 
-        // Actually, let's fix the dependency array for this effect.
-        if (isMouseOver.current) {
-          // We need to know if we are in large mode. 
-          // Since this effect has an empty dependency array, 'mode' is stale.
-          const isLarge = document.querySelector('.island-container')?.classList.contains('large');
-          if (isLarge) return;
-
+        if (isMouseOver.current && mode !== 'large') {
           const direction = e.deltaY < 0 ? 'up' : 'down';
+          
+          // Instant feedback: show overlay immediately
+          setShowScrollOverlay(true);
+          if (overlayTimeout.current) clearTimeout(overlayTimeout.current);
+          overlayTimeout.current = setTimeout(() => setShowScrollOverlay(false), 1500);
+
           if (scrollAction === 'volume') {
-            if (window.electronAPI && typeof window.electronAPI.changeVolume === 'function') {
+            if (window.electronAPI?.changeVolume) {
               window.electronAPI.changeVolume(direction).then((percent) => {
                 if (typeof percent === 'number' && Number.isFinite(percent)) {
-                  setScrollValue(Math.min(Math.max(percent, 0), 100));
+                  setScrollValue(percent);
                 } else {
-                  // Fallback when the main process can't return the real volume percent.
-                  // Keep the overlay roughly aligned by stepping a small amount.
-                  setScrollValue(prev => (direction === 'up' ? Math.min(prev + 2, 100) : Math.max(prev - 2, 0)));
+                  setScrollValue(prev => direction === 'up' ? Math.min(prev + 5, 100) : Math.max(prev - 5, 0));
                 }
-              }).catch(err => {
-                console.error("Volume IPC failed:", err);
+              }).catch(() => {
+                setScrollValue(prev => direction === 'up' ? Math.min(prev + 5, 100) : Math.max(prev - 5, 0));
               });
-              setShowScrollOverlay(true);
-              if (overlayTimeout.current) clearTimeout(overlayTimeout.current);
-              overlayTimeout.current = setTimeout(() => setShowScrollOverlay(false), 1500);
             }
           } else if (scrollAction === 'brightness') {
-            if (window.electronAPI && typeof window.electronAPI.changeBrightness === 'function') {
+            if (window.electronAPI?.changeBrightness) {
               window.electronAPI.changeBrightness(direction).then((percent) => {
                 if (typeof percent === 'number' && Number.isFinite(percent)) {
-                  setScrollValue(Math.min(Math.max(percent, 0), 100));
+                  setScrollValue(percent);
+                } else {
+                  setScrollValue(prev => direction === 'up' ? Math.min(prev + 10, 100) : Math.max(prev - 10, 0));
                 }
-              }).catch(err => {
-                console.error("Brightness IPC failed:", err);
+              }).catch(() => {
+                setScrollValue(prev => direction === 'up' ? Math.min(prev + 10, 100) : Math.max(prev - 10, 0));
               });
-              setShowScrollOverlay(true);
-              if (overlayTimeout.current) clearTimeout(overlayTimeout.current);
-              overlayTimeout.current = setTimeout(() => setShowScrollOverlay(false), 1500);
             }
           }
         }
@@ -920,6 +925,7 @@ export default function Island() {
         console.error("Wheel event error:", err);
       }
     };
+
     window.addEventListener('mousedown', handleDown);
     window.addEventListener('mouseup', handleUp);
     window.addEventListener('wheel', handleWheel);
@@ -928,7 +934,8 @@ export default function Island() {
       window.removeEventListener('mouseup', handleUp);
       window.removeEventListener('wheel', handleWheel);
     };
-  }, []);
+  }, [scrollAction, mode]); // removed scrollValue from deps to avoid re-mounting on every tick
+
 
   useEffect(() => {
     loadCalendarEvents();
@@ -1049,9 +1056,15 @@ export default function Island() {
     return { width: 560, height: 290 };
   })();
 
+  const calendarRows = Math.ceil((startWeekday(calendarMonth) + daysInMonth(calendarMonth)) / 7);
+  const calendarHeight = calendarRows > 5 ? 420 : 380;
+
   // Dynamic Width/Height based on mode and view - INCREASED FOR AI/DROPBOX
   const { width, height } = (() => {
     if (showInIslandSettings && mode === 'large') {
+      if (homepageType === 'widgets') {
+        return homeDimensions;
+      }
       return { width: 450, height: 400 };
     }
     if (mode === "large") {
@@ -1061,8 +1074,8 @@ export default function Island() {
         case 'dropbox': return { width: 420, height: 380 };
         case 'todo': return { width: 420, height: 320 };
         case 'todo_timer': return { width: 320, height: 260 };
-        case 'todo_calendar': return { width: 360, height: 320 };
-        case 'todo_calendar_events': return { width: 430, height: 340 };
+        case 'todo_calendar': return { width: 430, height: calendarHeight };
+        case 'todo_calendar_events': return { width: 430, height: calendarHeight };
         case 'weather': return { width: 350, height: 220 };
         case 'weather_details': return { width: 350, height: 200 };
         case 'search_urls': return { width: 400, height: 210 };
@@ -1073,6 +1086,9 @@ export default function Island() {
         case 'home': return homeDimensions;
         default: return { width: 480, height: 240 };
       }
+    }
+    if (showUpdateBanner && mode !== 'large') {
+      return { width: 350, height: 80 };
     }
     if ((isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) && mode !== 'large') {
       return isWatchHovered ? { width: 350, height: 39 } : { width: 210, height: 39 };
@@ -1234,12 +1250,34 @@ export default function Island() {
   }, []);
 
   useEffect(() => {
-    if (window.electronAPI?.googleCalendarStatus) {
-      window.electronAPI.googleCalendarStatus().then((status) => {
-        setGoogleConnected(Boolean(status?.connected));
+    if (window.electronAPI?.getUpdateStatus) {
+      window.electronAPI.getUpdateStatus().then((info) => {
+        if (info) {
+          setUpdateDownloaded(true);
+          if (!hasShownUpdateBanner) {
+            setShowUpdateBanner(true);
+            setHasShownUpdateBanner(true);
+          }
+        }
       });
     }
-  }, []);
+
+    if (window.electronAPI?.onUpdateStatus) {
+      window.electronAPI.onUpdateStatus((msg) => {
+        if (msg.status === 'downloaded') {
+          setUpdateDownloaded(true);
+          if (!hasShownUpdateBanner) {
+            setShowUpdateBanner(true);
+            setHasShownUpdateBanner(true);
+          }
+        } else if (msg.status === 'available') {
+          // If update is available but not yet downloaded, we can show a subtler hint 
+          // or just wait for it to download (auto-download is ON)
+          console.log("Update available, downloading...");
+        }
+      });
+    }
+  }, [hasShownUpdateBanner]);
 
   const toggleHomeWidget = (widgetKey) => {
     const exists = enabledHomeWidgets.includes(widgetKey);
@@ -2276,6 +2314,71 @@ export default function Island() {
     >
       {/* Notification View */}
 
+      {/* Update Notification Banner */}
+      {showUpdateBanner && mode !== 'large' && !ringingEvent && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: cornerRadius,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '12px 20px',
+          zIndex: 200,
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: textColor, marginBottom: 12, textAlign: 'center', letterSpacing: 1.5, textTransform: 'uppercase', opacity: 0.9 }}>
+            Update Ready
+          </div>
+          <div style={{ display: 'flex', gap: 12, width: '100%', justifyContent: 'center' }}>
+            <button
+              onClick={() => {
+                if (window.electronAPI?.quitAndInstall) {
+                  window.electronAPI.quitAndInstall();
+                }
+              }}
+              className="no-drag"
+              style={{
+                background: 'rgba(59, 130, 246, 0.25)',
+                color: '#3b82f6',
+                border: '1px solid rgba(59, 130, 246, 0.4)',
+                padding: '8px 16px',
+                borderRadius: 6,
+                fontSize: 10,
+                fontWeight: 800,
+                cursor: 'pointer',
+                letterSpacing: 1.2,
+                textTransform: 'uppercase'
+              }}
+            >
+              Restart
+            </button>
+            <button
+              onClick={() => setShowUpdateBanner(false)}
+              className="no-drag"
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                color: textColor,
+                border: '1px solid rgba(255,255,255,0.15)',
+                padding: '8px 16px',
+                borderRadius: 6,
+                fontSize: 10,
+                fontWeight: 800,
+                cursor: 'pointer',
+                letterSpacing: 1.2,
+                textTransform: 'uppercase',
+                opacity: 0.8
+              }}
+            >
+              Later
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Watch Live Bar (Timer/Stopwatch Running or Paused with value) */}
       {(isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) && mode !== 'large' && !ringingEvent && (
         <div
@@ -2811,6 +2914,57 @@ export default function Island() {
         </div>
       )}
 
+      {/* Stopwatch/Timer Pills in Expanded Mode */}
+      {mode === 'large' && !ringingEvent && (isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0) && (
+        <div style={{
+          position: 'absolute',
+          top: 15,
+          left: (view === 'todo_calendar' || view === 'todo_calendar_events' || view === 'todo_timer' || view === 'home') ? '50%' : 20,
+          transform: (view === 'todo_calendar' || view === 'todo_calendar_events' || view === 'todo_timer' || view === 'home') ? 'translateX(-50%)' : 'none',
+          zIndex: 110,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          pointerEvents: 'auto'
+        }}>
+          <div
+            onClick={() => {
+              if (isTimerRunning || (timerSeconds > 0 && !isStopwatchRunning)) {
+                setIsTimerRunning(!isTimerRunning);
+              } else {
+                setIsStopwatchRunning(!isStopwatchRunning);
+              }
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 12,
+              background: 'rgba(255,255,255,0.12)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            {isTimerRunning || (timerSeconds > 0 && !isStopwatchRunning) ? (
+              <TimerIcon size={12} color={textColor} />
+            ) : (
+              <RotateCcw size={12} color={textColor} />
+            )}
+            <span style={{
+              fontSize: 11,
+              fontWeight: 800,
+              color: textColor,
+              fontVariantNumeric: 'tabular-nums'
+            }}>
+              {(isTimerRunning || (timerSeconds > 0 && !isStopwatchRunning)) ? formatTimer(timerSeconds) : formatTimer(stopwatchSeconds)}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Persistent Clock Status (Top-Right on non-home views) */}
       {view !== 'dropbox' && !showInIslandSettings && (
         <div style={{
@@ -2932,6 +3086,7 @@ export default function Island() {
                 gap: 20,
                 paddingRight: 5
               }}>
+                {/* Clock Customization Section */}
                 {/* Clock Customization Section */}
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Clock Customization</div>
@@ -3097,13 +3252,12 @@ export default function Island() {
                   </div>
                 </div>
 
-                {/* Layout Customization Section */}
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Layout & Reordering</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+{/* Layout Customization Section */}
+<div>
+<div style={{ fontSize: 10, fontWeight: 800, opacity: 0.3, marginBottom: 10, textTransform: 'uppercase' }}>Layout & Reordering</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
 
-                    {/* Page Reordering */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div
                         onClick={() => setExpandedSections(prev => ({ ...prev, pages: !prev.pages }))}
                         style={{
@@ -4194,8 +4348,32 @@ export default function Island() {
                   </div>
                 </div>
 
-                {/* Reset Section */}
-                <div style={{ marginTop: 'auto', paddingTop: 10 }}>
+                <div style={{ marginTop: 'auto', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div
+                    onClick={async () => {
+                      if (window.electronAPI?.checkForUpdates) {
+                        const res = await window.electronAPI.checkForUpdates();
+                        if (res.success) {
+                          alert("Checking for updates... Check terminal for logs.");
+                        } else {
+                          alert("Update check failed: " + res.error);
+                        }
+                      }
+                    }}
+                    style={{
+                      padding: '12px',
+                      borderRadius: 12,
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      color: 'white',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      border: '1px solid rgba(255,255,255,0.1)'
+                    }}
+                  >
+                    CHECK FOR UPDATES
+                  </div>
                   <div
                     onClick={handleResetSettings}
                     style={{
@@ -4760,20 +4938,20 @@ export default function Island() {
               const domain = new URL(url).hostname.replace('www.', '');
               const iconUrl = `https://www.google.com/s2/favicons?sz=64&domain=${domain}`;
               return (
-                <div key={idx} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                <div key={url} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
                   <div
                     onClick={() => {
                       if (isEditingUrls) {
                         setEditingUrlIndex(idx);
-                        setNewUrlData({ name: '', url: url });
+                        setNewUrlInput(url);
                         setShowAddUrlModal(true);
                       } else {
-                        window.electronAPI?.openExternal ? window.electronAPI.openExternal(url) : window.open(url, "_blank");
-                        setView('home');
+                        setEmbeddedWebUrl(url);
+                        setView('search');
                       }
                     }}
                     style={{
-                      width: 45, height: 45, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+                      width: 40, height: 40, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
                       background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                       transition: 'all 0.2s ease',
                       border: isEditingUrls ? '1px solid rgba(255,255,255,0.3)' : 'none'
@@ -5133,8 +5311,9 @@ export default function Island() {
           opacity: getViewOpacity('todo'),
           pointerEvents: (view === 'todo' && mode === 'large') ? 'auto' : 'none',
           transform: getHorizontalTransform('todo'),
-          transition: (dragStartX !== null || dragStartY !== null) ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-          display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
+          transition: (dragStartX !== null || dragStartY !== null) ? 'none' : 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px',
+          overflow: 'hidden'
         }}>
           {/* Header */}
           <div style={{ position: 'absolute', top: 15, left: 20, right: 20, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -5360,11 +5539,14 @@ export default function Island() {
           opacity: getViewOpacity('todo_calendar'),
           pointerEvents: (view === 'todo_calendar' && mode === 'large') ? 'auto' : 'none',
           transform: getHorizontalTransform('todo_calendar'),
-          transition: (dragStartX !== null || dragStartY !== null) ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-          display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
+          transition: (dragStartX !== null || dragStartY !== null) ? 'none' : 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px',
+          overflow: 'hidden'
         }}>
           <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>CALENDAR</div>
+            {!(mode === 'large' && (isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0)) && (
+              <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>CALENDAR</div>
+            )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -5377,7 +5559,32 @@ export default function Island() {
               <ChevronLeft size={18} color={textColor} />
             </div>
 
-            <div style={{ fontSize: 14, fontWeight: 700, opacity: 0.9 }}>{formatMonthTitle(calendarMonth)}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, opacity: 0.9 }}>{formatMonthTitle(calendarMonth)}</div>
+              
+              {/* Today button - only show if not on current month */}
+              {calendarMonth.getMonth() !== new Date().getMonth() || calendarMonth.getFullYear() !== new Date().getFullYear() ? (
+                <div
+                  onClick={() => setCalendarMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    cursor: 'pointer',
+                    fontSize: 8,
+                    fontWeight: 800,
+                    letterSpacing: 0.8,
+                    opacity: 0.6,
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.opacity = '1'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.opacity = '0.6'; }}
+                >
+                  TODAY
+                </div>
+              ) : null}
+            </div>
 
             <div
               onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
@@ -5389,13 +5596,13 @@ export default function Island() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3, marginBottom: 10 }}>
             {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => (
-              <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, opacity: 0.35 }}>{d}</div>
+              <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, opacity: 0.35 }}>{d}</div>
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3, paddingBottom: 15 }}>
             {Array.from({ length: startWeekday(calendarMonth) }).map((_, idx) => (
               <div key={`pad-${idx}`} />
             ))}
@@ -5416,7 +5623,7 @@ export default function Island() {
                   style={{
                     width: '100%',
                     aspectRatio: '1 / 1',
-                    borderRadius: 9,
+                    borderRadius: 7,
                     background: isSelected ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.04)',
                     border: isSelected ? '1px solid rgba(255,255,255,0.15)' : '1px solid rgba(255,255,255,0.05)',
                     cursor: 'pointer',
@@ -5424,13 +5631,13 @@ export default function Island() {
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 3,
+                    gap: 2,
                     transition: 'all 0.2s ease'
                   }}
                 >
                   <div style={{
-                    width: 22,
-                    height: 22,
+                    width: 18,
+                    height: 18,
                     borderRadius: 999,
                     display: 'flex',
                     alignItems: 'center',
@@ -5438,9 +5645,9 @@ export default function Island() {
                     background: isToday ? 'rgba(59, 130, 246, 0.25)' : 'transparent',
                     border: isToday ? '1px solid rgba(59, 130, 246, 0.55)' : '1px solid transparent'
                   }}>
-                    <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.92, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{day}</div>
+                    <div style={{ fontSize: 11, fontWeight: 900, opacity: 0.92, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{day}</div>
                   </div>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: hasEvents ? '#ffffff' : 'transparent' }} />
+                  <div style={{ width: 4, height: 4, borderRadius: '50%', background: hasEvents ? '#ffffff' : 'transparent' }} />
                 </div>
               );
             })}
@@ -5453,19 +5660,22 @@ export default function Island() {
           opacity: getViewOpacity('todo_calendar_events'),
           pointerEvents: (view === 'todo_calendar_events' && mode === 'large') ? 'auto' : 'none',
           transform: getHorizontalTransform('todo_calendar_events'),
-          transition: (dragStartX !== null || dragStartY !== null) ? 'none' : 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-          display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px'
+          transition: (dragStartX !== null || dragStartY !== null) ? 'none' : 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          display: 'flex', flexDirection: 'column', padding: '40px 20px 20px 20px',
+          overflow: 'hidden'
         }}>
           <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10, display: 'flex', alignItems: 'center', gap: 15 }}>
-            <div
-              onClick={() => setView('todo_calendar')}
-              style={{ cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.2s ease', display: 'flex', alignItems: 'center', gap: 6 }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.4'}
-            >
-              <ChevronLeft size={14} color={textColor} />
-              <div style={{ fontSize: 9, fontWeight: 800, opacity: 0.6, letterSpacing: 1.4 }}>EVENTS</div>
-            </div>
+            {!(mode === 'large' && (isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0)) && (
+              <div
+                onClick={() => setView('todo_calendar')}
+                style={{ cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.2s ease', display: 'flex', alignItems: 'center', gap: 6 }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.4'}
+              >
+                <ChevronLeft size={14} color={textColor} />
+                <div style={{ fontSize: 9, fontWeight: 800, opacity: 0.6, letterSpacing: 1.4 }}>EVENTS</div>
+              </div>
+            )}
             <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.9 }}>{selectedCalendarDate}</div>
           </div>
 
@@ -5645,8 +5855,12 @@ export default function Island() {
           padding: '40px 20px 20px 20px'
         }}>
           <div style={{ position: 'absolute', top: 15, left: 20, zIndex: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <TimerIcon size={16} color={textColor} opacity={0.7} />
-            <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>WATCH</div>
+            {!(mode === 'large' && (isTimerRunning || isStopwatchRunning || timerSeconds > 0 || stopwatchSeconds > 0)) && (
+              <>
+                <TimerIcon size={16} color={textColor} opacity={0.7} />
+                <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.4, letterSpacing: 1.5 }}>WATCH</div>
+              </>
+            )}
           </div>
 
           <div style={{
@@ -5689,39 +5903,75 @@ export default function Island() {
             </div>
 
             {watchMode === 'timer' ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                <div
-                  onClick={() => {
-                    setTimerSeconds(prev => {
-                      const next = Math.max(0, prev - 60);
-                      setTimerTotalSeconds(next);
-                      return next;
-                    });
-                  }}
-                  style={{ cursor: 'pointer', opacity: 0.3, transition: 'opacity 0.2s' }}
-                  onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                  onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
-                >
-                  <ChevronDown size={20} color={textColor} />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                  <div
+                    onClick={() => {
+                      setTimerSeconds(prev => {
+                        const next = Math.max(0, prev - 60);
+                        setTimerTotalSeconds(next);
+                        return next;
+                      });
+                    }}
+                    style={{ cursor: 'pointer', opacity: 0.3, transition: 'opacity 0.2s' }}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
+                  >
+                    <ChevronDown size={20} color={textColor} />
+                  </div>
+
+                  <div style={{ fontSize: 42, fontWeight: 700, letterSpacing: -1, fontVariantNumeric: 'tabular-nums' }}>
+                    {formatTimer(timerSeconds)}
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      setTimerSeconds(prev => {
+                        const next = prev + 60;
+                        setTimerTotalSeconds(next);
+                        return next;
+                      });
+                    }}
+                    style={{ cursor: 'pointer', opacity: 0.3, transition: 'opacity 0.2s' }}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
+                  >
+                    <ChevronUp size={20} color={textColor} />
+                  </div>
                 </div>
 
-                <div style={{ fontSize: 42, fontWeight: 700, letterSpacing: -1, fontVariantNumeric: 'tabular-nums' }}>
-                  {formatTimer(timerSeconds)}
-                </div>
-
-                <div
-                  onClick={() => {
-                    setTimerSeconds(prev => {
-                      const next = prev + 60;
-                      setTimerTotalSeconds(next);
-                      return next;
-                    });
-                  }}
-                  style={{ cursor: 'pointer', opacity: 0.3, transition: 'opacity 0.2s' }}
-                  onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                  onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
-                >
-                  <ChevronUp size={20} color={textColor} />
+                {/* Preset Timer Buttons */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {[5, 15, 25, 45].map(min => (
+                    <div
+                      key={min}
+                      onClick={() => {
+                        const seconds = min * 60;
+                        setTimerSeconds(seconds);
+                        setTimerTotalSeconds(seconds);
+                      }}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: '50%',
+                        background: 'rgba(255,255,255,0.08)',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        fontSize: 9,
+                        fontWeight: 800,
+                        opacity: 0.75,
+                        transition: 'all 0.2s ease',
+                        backdropFilter: 'blur(10px)'
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.opacity = '1'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.opacity = 0.75; }}
+                    >
+                      {min}m
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : (

@@ -25,7 +25,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   changeVolume: (direction) => ipcRenderer.invoke('change-volume', direction),
+  getVolume: () => ipcRenderer.invoke('get-volume'),
   changeBrightness: (direction) => ipcRenderer.invoke('change-brightness', direction),
+  getBrightness: () => ipcRenderer.invoke('get-brightness'),
   saveTodo: (todos) => ipcRenderer.invoke('save-todo', todos),
   getTodo: () => ipcRenderer.invoke('get-todo'),
   getCalendarEvents: () => ipcRenderer.invoke('get-calendar-events'),
@@ -34,8 +36,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   googleCalendarDisconnect: () => ipcRenderer.invoke('google-calendar-disconnect'),
   googleCalendarSync: () => ipcRenderer.invoke('google-calendar-sync'),
   googleCalendarStatus: () => ipcRenderer.invoke('google-calendar-status'),
-  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (event, version) => callback(version)),
-  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (event, version) => callback(version)),
+  onUpdateStatus: (callback) => ipcRenderer.on('update-status', (event, status) => callback(status)),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
   quitAndInstall: () => ipcRenderer.send('quit-and-install')
 });

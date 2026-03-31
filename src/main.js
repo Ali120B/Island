@@ -441,17 +441,22 @@ app.whenReady().then(() => {
   createWindow();
   
   // Setup Auto-Updater
-  if (app.isPackaged) {
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-    
-    // Configure GitHub provider explicitly (optional but safer)
-    autoUpdater.setFeedURL({
-      provider: 'github',
-      owner: 'Ali120B',
-      repo: 'Island'
-    });
+  autoUpdater.logger = console;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
 
+  // Manual Trigger
+  ipcMain.handle('check-for-updates', async () => {
+    try {
+      const result = await autoUpdater.checkForUpdatesAndNotify();
+      return { success: true, result };
+    } catch (err) {
+      console.error('[Updater] Manual check failed:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  if (app.isPackaged) {
     autoUpdater.checkForUpdatesAndNotify();
     
     // Check for updates every hour
@@ -459,23 +464,38 @@ app.whenReady().then(() => {
       autoUpdater.checkForUpdatesAndNotify();
     }, 60 * 60 * 1000);
 
+    autoUpdater.on('checking-for-update', () => {
+      console.log('[Updater] Checking for update...');
+    });
+
     autoUpdater.on('update-available', (info) => {
       console.log('[Updater] Update available:', info.version);
-      if (settingsWindow) settingsWindow.webContents.send('update-available', info.version);
-      if (mainWindow) mainWindow.webContents.send('update-available', info.version);
+      const msg = { version: info.version, status: 'available' };
+      if (settingsWindow) settingsWindow.webContents.send('update-status', msg);
+      if (mainWindow) mainWindow.webContents.send('update-status', msg);
+    });
+
+    autoUpdater.on('update-not-available', (info) => {
+      console.log('[Updater] Update not available.');
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+      let log_message = "Download speed: " + progressObj.bytesPerSecond;
+      log_message = log_message + ' - Downloaded ' + progressObj.percent + '%';
+      log_message = log_message + ' (' + progressObj.transferred + "/" + progressObj.total + ')';
+      console.log('[Updater] ' + log_message);
     });
 
     autoUpdater.on('update-downloaded', (info) => {
       console.log('[Updater] Update downloaded:', info.version);
       updateDownloadedInfo = info;
-      if (settingsWindow) settingsWindow.webContents.send('update-downloaded', info.version);
-      if (mainWindow) mainWindow.webContents.send('update-downloaded', info.version);
-      
-      // Removed dialog message box as per request to use in-app banner
+      const msg = { version: info.version, status: 'downloaded' };
+      if (settingsWindow) settingsWindow.webContents.send('update-status', msg);
+      if (mainWindow) mainWindow.webContents.send('update-status', msg);
     });
 
     autoUpdater.on('error', (err) => {
-      console.error('[Updater] Error:', err);
+      console.error('[Updater] Signal Error:', err);
     });
   }
 
@@ -570,48 +590,207 @@ ipcMain.handle('get-settings', async () => {
   return readSettings();
 });
 
-ipcMain.handle('change-volume', (event, direction) => {
-  const key = direction === 'up' ? '[char]175' : '[char]174';
-  const script = `(New-Object -ComObject WScript.Shell).SendKeys(${key})`;
-  exec(`powershell -NoProfile -Command "${script}"`);
-  return null;
+ipcMain.handle('change-volume', async (event, direction) => {
+  const change = direction === 'up' ? 0.02 : -0.02;
+  
+  const psScript = `
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+[Guid("5CDF2C82-841E-4546-972F-1C692B79FE38"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IAudioEndpointVolume {
+    int f1(); int f2(); int f3(); int f4();
+    int SetMasterVolumeLevelScalar(float fLevel, Guid pguidEventContext);
+    int GetMasterVolumeLevelScalar(out float pfLevel);
+    int f7(); int f8(); int f9(); int f10();
+}
+[Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDevice {
+    int Activate(ref Guid iid, int dwClsCtx, IntPtr pActivationParams, [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
+}
+[Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDeviceEnumerator {
+    int f1();
+    int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice ppDevice);
+}
+[ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumerator { }
+public class Audio {
+    public static float Get() {
+        try {
+            var enumerator = new MMDeviceEnumerator() as IMMDeviceEnumerator;
+            IMMDevice device; enumerator.GetDefaultAudioEndpoint(0, 1, out device);
+            Guid iid = typeof(IAudioEndpointVolume).GUID;
+            object o; device.Activate(ref iid, 0, IntPtr.Zero, out o);
+            var endpoint = o as IAudioEndpointVolume; float volume;
+            endpoint.GetMasterVolumeLevelScalar(out volume);
+            return volume;
+        } catch { return -1; }
+    }
+    public static void Set(float level) {
+        try {
+            var enumerator = new MMDeviceEnumerator() as IMMDeviceEnumerator;
+            IMMDevice device; enumerator.GetDefaultAudioEndpoint(0, 1, out device);
+            Guid iid = typeof(IAudioEndpointVolume).GUID;
+            object o; device.Activate(ref iid, 0, IntPtr.Zero, out o);
+            var endpoint = o as IAudioEndpointVolume;
+            endpoint.SetMasterVolumeLevelScalar(level, Guid.Empty);
+        } catch { }
+    }
+}
+'@
+try {
+  $c = [Audio]::Get()
+  if ($c -lt 0) { Write-Output 50; exit }
+  $n = $c + ${change}
+  if ($n -gt 1) { $n = 1 }
+  if ($n -lt 0) { $n = 0 }
+  [Audio]::Set($n)
+  Write-Output ([Math]::Round($n * 100))
+} catch { Write-Output 50 }`;
+
+  const tempPath = path.join(app.getPath('userData'), `vol-${Date.now()}-${Math.random().toString(36).slice(2)}.ps1`);
+  try {
+    fs.writeFileSync(tempPath, psScript, { encoding: 'utf8' });
+  } catch (e) {
+    console.error('[Main] Failed to write vol script:', e);
+    return null;
+  }
+  
+  return new Promise((resolve) => {
+    exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempPath}"`, { timeout: 6000 }, (err, stdout, stderr) => {
+      try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
+      if (err) {
+        console.error('[Main] Volume PS Error:', err, stderr);
+        resolve(null);
+      } else {
+        const n = Number(String(stdout).trim());
+        resolve(Number.isFinite(n) ? n : null);
+      }
+    });
+  });
 });
+
+ipcMain.handle('get-volume', async () => {
+  const psScript = `
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+[Guid("5CDF2C82-841E-4546-972F-1C692B79FE38"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IAudioEndpointVolume {
+    int f1(); int f2(); int f3(); int f4();
+    int SetMasterVolumeLevelScalar(float fLevel, Guid pguidEventContext);
+    int GetMasterVolumeLevelScalar(out float pfLevel);
+    int f7(); int f8(); int f9(); int f10();
+}
+[Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDevice {
+    int Activate(ref Guid iid, int dwClsCtx, IntPtr pActivationParams, [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
+}
+[Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDeviceEnumerator {
+    int f1();
+    int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice ppDevice);
+}
+[ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumerator { }
+public class Audio {
+    public static float Get() {
+        try {
+            var enumerator = new MMDeviceEnumerator() as IMMDeviceEnumerator;
+            IMMDevice device; enumerator.GetDefaultAudioEndpoint(0, 1, out device);
+            Guid iid = typeof(IAudioEndpointVolume).GUID;
+            object o; device.Activate(ref iid, 0, IntPtr.Zero, out o);
+            var endpoint = o as IAudioEndpointVolume; float volume;
+            endpoint.GetMasterVolumeLevelScalar(out volume);
+            return volume;
+        } catch { return -1; }
+    }
+}
+'@
+$c = [Audio]::Get()
+if ($c -lt 0) { Write-Output 50 } else { Write-Output ([Math]::Round($c * 100)) }`;
+
+  const tempPath = path.join(app.getPath('userData'), `getvol-${Date.now()}.ps1`);
+  try {
+    fs.writeFileSync(tempPath, psScript, { encoding: 'utf8' });
+    return new Promise((resolve) => {
+      exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempPath}"`, { timeout: 5000 }, (err, stdout) => {
+        try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
+        if (err) resolve(50);
+        else {
+          const n = Number(String(stdout).trim());
+          resolve(Number.isFinite(n) ? n : 50);
+        }
+      });
+    });
+  } catch (e) {
+    return 50;
+  }
+});
+
 
 ipcMain.handle('change-brightness', (event, direction) => {
   return new Promise((resolve) => {
     const increment = direction === 'up' ? 10 : -10;
     const psScript = `
-$ErrorActionPreference = 'Stop'
-$brightness = (Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightness).CurrentBrightness
-$newBrightness = $brightness + ${increment}
-if ($newBrightness -gt 100) { $newBrightness = 100 }
-if ($newBrightness -lt 0) { $newBrightness = 0 }
-(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, $newBrightness) | Out-Null
-Write-Output $newBrightness
+try {
+  $ErrorActionPreference = 'Stop'
+  $monitors = Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightness
+  $brightness = $monitors[0].CurrentBrightness
+  $newBrightness = $brightness + ${increment}
+  if ($newBrightness -gt 100) { $newBrightness = 100 }
+  if ($newBrightness -lt 0) { $newBrightness = 0 }
+  $methods = Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods
+  $methods[0].WmiSetBrightness(1, $newBrightness)
+  Write-Output $newBrightness
+} catch {
+  Write-Output 50
+}
 `;
 
-    const tempPath = path.join(app.getPath('userData'), 'brightness-script.ps1');
-
+    const tempPath = path.join(app.getPath('userData'), `brightness-${Date.now()}.ps1`);
     try {
-      fs.writeFileSync(tempPath, psScript);
+      fs.writeFileSync(tempPath, psScript, { encoding: 'utf8' });
+      exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempPath}"`, { timeout: 6000 }, (err, stdout) => {
+        try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch { }
+        if (err) resolve(null);
+        else {
+          const n = Number(String(stdout).trim());
+          resolve(Number.isFinite(n) ? n : null);
+        }
+      });
     } catch (e) {
-      console.error('[Main] Failed to write brightness script:', e);
-      return resolve(null);
+      resolve(null);
     }
-
-    exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempPath}"`, { timeout: 6000 }, (err, stdout, stderr) => {
-      try { fs.unlinkSync(tempPath); } catch { }
-
-      if (err) {
-        console.error('[Main] change-brightness failed:', err.message);
-        if (stderr) console.error('[Main] change-brightness stderr:', stderr);
-        return resolve(null);
-      }
-      const n = Number(String(stdout).trim());
-      resolve(Number.isFinite(n) ? n : null);
-    });
   });
 });
+
+ipcMain.handle('get-brightness', async () => {
+  const psScript = `
+try {
+  $monitors = Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightness
+  Write-Output $monitors[0].CurrentBrightness
+} catch {
+  Write-Output 50
+}
+`;
+  const tempPath = path.join(app.getPath('userData'), `getbrightness-${Date.now()}.ps1`);
+  try {
+    fs.writeFileSync(tempPath, psScript, { encoding: 'utf8' });
+    return new Promise((resolve) => {
+      exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempPath}"`, { timeout: 5000 }, (err, stdout) => {
+        try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
+        if (err) resolve(50);
+        else {
+          const n = Number(String(stdout).trim());
+          resolve(Number.isFinite(n) ? n : 50);
+        }
+      });
+    });
+  } catch (e) {
+    return 50;
+  }
+});
+
 
 ipcMain.handle('save-todo', async (event, todos) => {
   try {
